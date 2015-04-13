@@ -1,0 +1,13 @@
+Package: rterm
+Type: Package
+Title: Temperature-Energy Regression Models for Building Energy Use Data
+Version: 0.0.0.9000
+Date: 2015-04-01
+Authors@R: person("Michael", "Logsdon", email = "michael@ecotope.com",role = c("aut", "cre"))
+Description: An implementation of frequentist and Bayesian models for weather-adjusting and 
+		performing statistical inference with building energy use data.
+Depends: R (>= 3.1.0)
+License: GPL-2
+Imports:
+	plyr,
+	ggplot2

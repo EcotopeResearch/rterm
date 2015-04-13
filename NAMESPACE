@@ -1,0 +1,5 @@
+exportPattern("^[[:alpha:]]+")
+useDynLib(rterm, findChangePoint)
+useDynLib(rterm, cpl1)
+useDynLib(rterm, bootstrapChangePoint)
+useDynLib(rterm, l1_path)
