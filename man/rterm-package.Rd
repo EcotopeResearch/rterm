@@ -3,8 +3,7 @@
 \alias{rterm}
 \docType{package}
 \title{
-Temperature-Energy regression models for building energy use data
-~~ package title ~~
+Temperature-Energy Regression Models for Energy Use in Buildings
 }
 \description{
 This package contains functions to 
@@ -12,26 +11,25 @@ perform regressions of building energy use data on outdoor temperature
 and variables derived from outdoor temperature. This includes a 
 frequentist change-point model, a frequentist variable-base-degree-day model,
 and a Bayesian change-point model. All models apply to heating, cooling, or both.
-~~ A concise (1-5 lines) description of the package ~~
 }
 \details{
 \tabular{ll}{
 Package: \tab rterm\cr
 Type: \tab Package\cr
-Version: \tab 1.0\cr
+Version: \tab 0.0.0.9000\cr
 Date: \tab 2015-04-01\cr
-License: \tab What license is it under?\cr
+License: \tab GPL-2\cr
 }
-~~ An overview of how to use the package, including the most important functions ~~
+
 }
 \author{
 Michael Logsdon
 
 Maintainer: Michael Logsdon, michael@ecotope.com
-~~ The author and/or maintainer of the package ~~
+
 }
 \references{
-~~ Literature or other references for background information ~~
+References to come later
 }
 ~~ Optionally other standard keywords, one per line, from file KEYWORDS in the R documentation directory ~~
 \keyword{ package }
@@ -40,9 +38,18 @@ Maintainer: Michael Logsdon, michael@ecotope.com
 ~~ \code{\link[<pkg>:<pkg>-package]{<pkg>}} ~~
 }
 \examples{
+# Architecture Office in Bremerton
 data(rfm)
-mod <- cplm(kwhd ~ avetemp, data = rfm)
+mod <- cplm(kwh ~ oat, data = rfm)
 summary(mod)
 plot(mod)
-~~ simple examples of the most important functions ~~
+
+
+# Ecotope Office Energy Use
+data(ecotope)
+mod <- cplm(kwhd ~ oat, data = ecotope)
+coef(mod)
+plot(mod)
+resids(mod, "dateEnd") # Weather-adjusted time trend
+
 }

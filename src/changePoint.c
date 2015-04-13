@@ -513,11 +513,11 @@ SEXP cpl1(SEXP temp, SEXP energy, SEXP lambdax) {
   //Have a default value that can be overriden
   //printf("MSE = %f\n", ss_tmp / n);
   if(*cLambda == 0) {
-    //lambda = sqrt(ss_tmp) * 12;  
-    lambda = ss_tmp / n;
+    lambda = sqrt(ss_tmp) * 12;  
+    //lambda = ss_tmp / n * 2.5;
   } else {
-    //lambda = *cLambda * sqrt(ss_tmp);
-    lambda = *cLambda * ss_tmp / n;
+    lambda = *cLambda * sqrt(ss_tmp);
+    //lambda = *cLambda * ss_tmp / n;
   }
 
   

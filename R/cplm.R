@@ -120,7 +120,7 @@ cplm <- function(formula, data, weights, heating = NULL, cooling = NULL, se = TR
   
   #Specify whether to use the LS or L1 coefficients
   #Check 1 - outlying bills
-  if(max(abs(scale(energy))) > 3) {
+  if(max(abs(scale(energy))) > 3.5) {
     attr(results, "fit") <- "L1"
   } else {
     attr(results, "fit") <- "LS"
