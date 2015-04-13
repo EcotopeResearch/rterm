@@ -1,0 +1,537 @@
+#change point linear model functions...
+#Mike Logsdon, Spring 2015
+
+
+#Wraps cplm to perform many change point linear models 
+#on a dataset with many buildings
+cplmx <- function(formula, data, id_vars, heating = NULL, cooling = NULL, se = FALSE, lambda = 0) {
+  namesFull <- c("baseLoad", "heatingSlope", "coolingSlope", "slope",
+                 "heatingChangePoint", "coolingChangePoint")
+  
+  allCoefs <- do.call('rbind', by(data, data[id_vars], function(x) {
+    modTmp <- cplm(formula, x, heating = NULL, cooling = NULL, se = FALSE, lambda = 0)
+    coefTmp <- coef(modTmp)
+    notFound <- setdiff(namesFull, names(coefTmp))
+    toReturn <- c(x[1, id_vars], coefTmp)
+    if(length(notFound)) {
+      toAdd <- rep(NA, length(notFound))
+      names(toAdd) <- notFound
+      toReturn <- c(toReturn, toAdd)
+    }
+
+    toReturn <- data.frame(toReturn)
+    toReturn
+  }))
+  results <- list("df" = allCoefs, "formula" = formula, "id_vars" = id_vars, data = "data")
+  class(results) <- "cplmdf"
+  
+  return(results)
+}
+
+plotone.cplmdf <- function(x, ...) {
+  
+  #Subset the data to grab just the requested ids
+  
+  
+}
+
+
+#The basic change point linear model function.
+cplm <- function(formula, data, weights, heating = NULL, cooling = NULL, se = TRUE, doubleMode = FALSE, nreps = 200, parametric = NULL, lambda = 0) {
+  
+  #Bunch of stuff pasted from the lm code... parses the formula, data, subset, weights
+  mf <- match.call(expand.dots = FALSE)
+  m <- match(c("formula", "data", "subset", "weights"), names(mf), 0L)
+  mf <- mf[c(1L, m)]
+  mf$drop.unused.levels <- TRUE
+  mf[[1L]] <- quote(stats::model.frame)
+  mf <- eval(mf, parent.frame())
+  mt <- attr(mf, "terms")
+  energy <- model.response(mf, "numeric")
+  weights <- as.vector(model.weights(mf))
+  temp <- model.matrix(mt, mf)
+  temp <- temp[, -1]
+  
+  #Check if we have weights
+  if(is.null(weights)) {
+    weights <- rep(1, nrow(data))
+  }
+
+  #Remove rows w/ NAs...
+  data <- na.omit(data)
+  if(!nrow(data)) {
+    print("Error: No Rows with non-NA values")
+    return(NULL)
+  }
+  
+  #Set the parametric/non-parametric...
+  if(is.null(parametric)) {
+    if(nrow(data) < 50) {
+      parametric <- TRUE
+    } else {
+      parametric <- FALSE
+    }
+  }
+  #Check for a subset
+  #   if(is.null(subset)) {
+  #     subset <- TRUE
+  #   }
+
+  #Calculate the penalized coefficients
+  l1Results <- .Call("cpl1", temp, energy, lambda)
+  names(l1Results) <- c("baseLoad", "heatingSlope", "heatingChangePoint",
+                        "coolingSlope", "coolingChangePoint")
+  l1Results <- c(l1Results, "slope" = NA, "intercept" = NA)
+  #print(l1Results)
+  #Do we have heating/cooling?
+  if(is.null(heating) & is.null(cooling)) {
+    heating <- l1Results[2] > 0  
+    cooling <- l1Results[4] > 0 
+  }
+  
+  #If we found a significant heating/cooling change-point, else just do a constant
+  if(heating | cooling) {
+    results <- cplm.one(temp, energy, weights, heating, cooling, se, doubleMode, nreps, parametric) 
+  } else {
+    results <- list()
+    results$data <- data.frame("temp" = temp, "energy" = energy)
+    cpExists <- isChangePoint(l1Results, results$data$temp)
+    
+    lsResults <- c("baseLoad" = NA, "heatingSlope" = NA, "heatingChangePoint" = NA,
+                   "coolingSlope" = NA, "coolingChangePoint" = NA)
+    if(!cpExists) {
+      modTmp <- lm(energy ~ temp, data = results$data)
+      lsResults <- c(lsResults, "slope" = coef(modTmp)[2], "intercept" = coef(modTmp)[1])
+    } else {
+      lsResults['baseLoad'] <- mean(energy)
+      lsResults <- c(lsResults, "slope" = NA, "intercept" = NA)
+    }
+    results$LS <- lsResults
+ 
+    results$formula <- formula
+    class(results) <- "cplm"
+
+  } 
+  
+  #Add in the formula...
+  results$formula <- formula
+  results$dataOrig <- data
+  results$L1 <- l1Results
+  
+  #Specify whether to use the LS or L1 coefficients
+  #Check 1 - outlying bills
+  if(max(abs(scale(energy))) > 3) {
+    attr(results, "fit") <- "L1"
+  } else {
+    attr(results, "fit") <- "LS"
+  }
+  
+  return(results)
+  
+}
+
+
+#One cplm model.
+cplm.one <- function(temp, energy, weights, heating, cooling, se, doubleMode, nreps, parametric) {
+  
+  #Fit the regression parameters
+  results <- cplm.fit(temp, energy, weights, heating, cooling)
+  class(results) <- "cplm"
+  
+  #Check if we have a no-changepoint situation...
+  if(is.na(results$LS['heatingChangePoint'] & is.na(results$LS['coolingChangePoint']))) {
+    se <- FALSE
+  } 
+  
+  #If it looks like we may have a double mode scenario, perform the double
+  #operating mode fit
+  if(doubleMode) {
+    groups <- cplm.fit.double(temp, energy, weights, heating, cooling)
+    rows1 <- groups$group == 1
+    rows2 <- groups$group == 2
+    results1 <- cplm.fit(temp[rows1], energy[rows1], weights[rows1], heating, cooling)
+    results2 <- cplm.fit(temp[rows2], energy[rows2], weights[rows2], heating, cooling)
+    results1$formula <- results2$formula <- formula
+    class(results1) <- class(results2) <- "cplm"
+    results <- list(results1, results2)
+    class(results) <- "cplm"
+    attr(results, "type") <- "double"
+  }
+  
+  #If se = TRUE (standard error = TRUE), we need to bootstrap
+  if(se) {
+    bootstraps <- .Call("bootstrapChangePoint", temp, energy, weights, as.integer(nreps), heating, cooling, parametric);
+    bootstraps <- as.data.frame(bootstraps) 
+    if(heating & !cooling) {
+      names(bootstraps) <- c("baseLoad", "heatingSlope", "heatingChangePoint")      
+    } else if(cooling & !heating) {
+      names(bootstraps) <- c("baseLoad", "coolingSlope", "coolingChangePoint")
+    } else {
+      names(bootstraps) <- c("baseLoad", "heatingSlope", "coolingSlope",
+                             "heatingChangePoint", "coolingChangePoint")
+    }
+    
+    #Stupid hack for now, remove where we lost the change point. Should be incorporated...
+    if(heating) bootstraps <- bootstraps[bootstraps$heatingSlope > 0, ]
+    if(cooling) bootstraps <- bootstraps[bootstraps$coolingSlope > 0, ]
+    results$bootstraps <- bootstraps
+  } else {
+    bootstraps <- NULL
+  }
+  
+  results
+  
+}
+
+
+cplm.fit <- function(temp, energy, weights = NULL, heating = TRUE, cooling = FALSE) {
+  cp <- .Call("findChangePoint", temp, energy, weights, heating, cooling)
+  df <- data.frame(temp, energy)
+  
+  # Will return a vector of coefficients & the data frame
+  lsResults <- rep(NA, 7)
+  names(lsResults) <- c("baseLoad", "heatingSlope", "heatingChangePoint",
+                        "coolingSlope", "coolingChangePoint",
+                        "slope", "intercept")
+  
+  # 1) Just baseload, 2) No Change Point Found, 3) Normal
+  if(!heating & !cooling) {
+    lsResults['baseLoad'] <- mean(energy)
+  } else if(sum(cp) == 0) {
+    modTmp <- lm(energy ~ temp)
+    lsResults['intercept'] <- as.numeric(coef(modTmp)[1])
+    lsResults['slope'] <- as.numeric(coef(modTmp)[2])
+  } else {
+    if(heating) {
+      df$xHeating <- makeCpVar(temp, cp[1], heating = TRUE)
+      if(sum(df$temp > cp[1]) == 0 | (sum(df$temp < cp[1]) == 0)) {
+        cp[1] <- NA
+        df$xHeating <- NULL
+      }
+    }
+    if(cooling) {
+      cp <- round(cp, 1)
+      names(cp)[heating + cooling] <- "cooling"
+      df$xCooling <- makeCpVar(temp, cp[heating + cooling], heating = FALSE)
+      if(sum(df$temp < cp[heating + cooling] | (sum(df$temp > cp[1]) == 0)) == 0) {
+        cp[heating + cooling] <- NA
+        df$xCooling <- NULL
+      }
+    }
+    mod <- lm(energy ~ ., data = df[, names(df) %in% c("energy", "xHeating", "xCooling")])  
+    lsResults['baseLoad'] <- as.numeric(coef(mod)[1])
+    if(heating) {
+      lsResults['heatingSlope'] <- as.numeric(coef(mod)['xHeating']);
+      lsResults['heatingChangePoint'] <- cp[1];
+    }
+    if(cooling) {
+      lsResults['coolingSlope'] <- as.numeric(coef(mod)['xCooling'])
+      lsResults['coolingChangePoint'] <- cp[heating + cooling];
+    }
+    
+  }
+  
+  return(list("data" = df, "LS" = lsResults))
+}
+
+
+isChangePoint <- function(coefs, temp) {
+  # 'Heating' found
+  n <- length(temp)
+  if(coefs[2] > 0) {
+    # Pts in 'heating'
+    x <- sum(temp <= coefs[2])
+    if(x == n | x == 0) {
+      return(FALSE)
+    }
+  }
+  # 'Cooling' found
+  if(coefs[4] > 0) {
+    # Pts in 'cooling'
+    x <- sum(temp >= coefs[2])
+    if(x == n | x == 0) {
+      return(FALSE)
+    }    
+  }
+  return(TRUE)
+}
+
+
+print.cplm <- function(x) {
+  if(attr(mod, "fit") == "LS") {
+    return(x$LS[!is.na(x$LS)])
+  } else {
+    return(x$L1[!is.na(x$LS)])
+  }
+#   toPrint <- c("baseLoad" = as.numeric(coef(x$mod)[1]))
+#   if(length(coef(x$mod)) == 1) return(toPrint)
+#   if("xHeating" %in% names(x$data)) {
+#     toPrint <- c(toPrint, "changePointHeating" = as.numeric(x$changePoint[1]))
+#     toPrint <- c(toPrint, "heatingSlope" = as.numeric(coef(x$mod)[2]))
+#     if("xCooling" %in% names(x$data)) {
+#       toPrint <- c(toPrint, "changePointCooling" = as.numeric(x$changePoint[2]))
+#       toPrint <- c(toPrint, "coolingSlope" = as.numeric(coef(x$mod)[3]))
+#     }
+#   } else {
+#     toPrint <- c(toPrint, "changePointCooling" = as.numeric(x$changePoint[1]))
+#     toPrint <- c(toPrint, "coolingSlope" = as.numeric(coef(x$mod)[2]))
+#   }
+#   toPrint
+}
+
+coef.cplm <- function(x, fit = NULL) {
+  if(is.null(fit)) {
+    fit <- attr(mod, "fit")
+  }
+    
+  if(fit == "LS") {
+    print("Least Squares Coefficients:")
+    return(x$LS[!is.na(x$LS)])
+  } else {
+    print("L1 Penalized Least Squares Coefficients:")
+    return(x$L1[!is.na(x$LS)])
+  }  
+
+}
+
+#Have an 'annual' method that can be used by the various objects
+annual <- function(x) UseMethod("annual")
+
+annual.cplm <- function(x, type = "observed") {
+  coefs <- coef(x)
+  if(is.na(coefs['baseLoad'])) {
+    stop("Cannot Annualize A Fit W/ No Base Load")
+  } else {
+    energy <- x$data$energy
+    temp <- x$data$temp
+    if(type == "observed") {
+      toRet <- c("Total" = sum(energy))
+      if(!is.na(coefs['heatingSlope'])) {
+        tmp <- sum((energy - coefs['baseLoad'])[temp < coefs['heatingChangePoint']])
+        toRet <- c(toRet, "Heating" = tmp)
+      }
+      if(!is.na(coefs['coolingSlope'])) {
+        tmp <- sum((energy - coefs['baseLoad'])[temp > coefs['coolingChangePoint']])
+        toRet <- c(toRet, "Cooling" = tmp)
+      }
+      
+      tmp <- toRet['Total']
+      if(!is.na(toRet['Heating'])) {
+        tmp <- tmp - toRet['Heating']
+      }
+      if(!is.na(toRet['Cooling'])) {
+        tmp <- tmp - toRet['Cooling']
+      }
+      toRet <- c(toRet, "Base Load" = as.numeric(tmp))
+      return(toRet)
+    } else if(type == "TMY") {
+      stop("TMY Annualization Not Yet Implemented")
+    }
+  }
+}
+
+
+summary.cplm <- function(object, ...) {
+  coefs <- print(object)
+  if(is.null(object$bootstraps)) {
+    return(coefs)
+  } else {
+    ses <- sapply(names(coefs), function(coef) {
+      sd(object$bootstraps[, coef])
+    })
+    lower95s <- sapply(names(coefs), function(coef) {
+      as.numeric(quantile(object$bootstraps[, coef], .05))
+    })
+    upper95s <- sapply(names(coefs), function(coef) {
+      as.numeric(quantile(object$bootstraps[, coef], .95))
+    })
+    df <- data.frame("Estimate" = coefs, "Standard.Error" = ses, 
+                     "Lower.95" = lower95s, "Upper.95" = upper95s)
+    return(df)
+  }
+}
+
+
+predict.cplm <- function(object, newdata, fit = NULL) {
+
+  
+  #Pull out the formula from the original object, should fit new data
+  mf <- model.frame(object$formula, newdata)
+  newdata$energy <- model.response(mf, "numeric")
+  temp <- model.matrix(object$formula, mf)
+  newdata$temp <- temp[, -1]
+  
+  #Check if we're using the LS or L1 fitted coefficients
+  if(is.null(fit)) {
+    fit <- attr(object, "fit")
+  }
+  
+  coefs <- coef(object, fit)
+  
+  
+  if(!is.na(coefs['slope'])) {
+    return(coefs['intercept'] + coefs['slope'] * newdata$temp)
+  } else {
+    toReturn <- rep(coefs['baseLoad'], nrow(newdata))
+    #Look for heating/cooling, make change point vars as appropriate
+    heating <- !is.null(object$data$xHeating)
+    cooling <- !is.null(object$data$xCooling)
+    if(heating) {
+      newdata$xHeating <- makeCpVar(newdata$temp, coefs['heatingChangePoint'])
+      toReturn <- toReturn + coefs['heatingSlope'] * newdata$xHeating
+    }
+    if(cooling) {
+      newdata$xCooling <- makeCpVar(newdata$temp, coefs['coolingChangePoint'], heating = FALSE)
+      toReturn <- toReturn + coefs['coolingSlope'] * newdata$xCooling
+    }    
+    return(as.numeric(toReturn))
+  }
+
+  return(toReturn)
+
+}
+
+
+plot.cplm <- function(x, fit = NULL) {
+  
+  #Check if this is a single or a double fit
+  #if(attr(x, "type") == "single") {
+  if(1) {
+    
+    if(is.null(fit)) {
+      fit <- attr(x, "fit")
+    }
+    #Make the energy & temp into a data frame for ggplot
+    df <- x$data
+    
+    #Look for heating/cooling
+    heating <- !is.null(df$xHeating)
+    cooling <- !is.null(df$xCooling)
+    tempOnly <- "slope" %in% names(coef(x$mod))
+    
+    #Make another data frame of fitted values for ggplot
+    tmin <- min(df$temp)
+    tmax <- max(df$temp)
+    ts <- seq(from = tmin, to = tmax, length.out = 100)
+    df2 <- data.frame("temp" = ts, "energy" = 1)
+    x$formula <- formula(energy ~ temp)
+    df2$fitted1 <- predict(x, df2, "LS")
+    df2$fitted2 <- predict(x, df2, "L1")
+
+    
+    
+    #If we have some bootstrap results...
+    if(!is.null(x$bootstraps) & fit == "LS") {
+      bootDf <- do.call('rbind', lapply(1:nrow(x$bootstraps), function(i) {
+        dfTmp <- data.frame("temp" = ts)
+        dfTmp$fitted <- x$bootstraps$baseLoad[i]
+        if(heating) {
+          dfTmp$xHeating <- makeCpVar(dfTmp$temp, x$bootstraps$heatingChangePoint[i], heating = TRUE)  
+          dfTmp$fitted <- dfTmp$fitted + dfTmp$xHeating * x$bootstraps$heatingSlope[i]
+        }
+        if(cooling) {
+          dfTmp$xCooling <- makeCpVar(dfTmp$temp, x$bootstraps$coolingChangePoint[i], heating = FALSE)
+          dfTmp$fitted <- dfTmp$fitted + dfTmp$xCooling * x$bootstraps$coolingSlope[i]
+        }    
+        dfTmp
+      }))
+      
+      bounds <- ddply(bootDf, .(temp), function(x) {
+        c("mean" = mean(x$fitted), "se" = sd(x$fitted))
+      })
+      ggplot(bounds) + theme_bw() + geom_line(aes(x = temp, y = mean))
+      bounds$lower <- bounds$mean - 2 * bounds$se
+      bounds$upper <- bounds$mean + 2 * bounds$se
+      
+    } else if(!heating & !cooling) {
+      mu <- mean(df$energy)
+      sez <- sd(df$energy) / sqrt(nrow(df))
+      df$lower <- mu - 2 * sez
+      df$upper <- mu + 2 * sez
+    } 
+    
+    plotObject <- ggplot(df) + theme_bw() + 
+      geom_point(aes(x = temp, y = energy)) + 
+      ggtitle(paste("Energy by Mean OAT")) +
+      xlab("Mean OAT (F)") + ylab("Energy (kWh)")
+    
+    if(fit == "LS") {
+      plotObject <- plotObject + geom_line(data = df2, aes(x = temp, y = fitted1))
+    } else if(fit == "L1") {
+      plotObject <- plotObject + geom_line(data = df2, aes(x = temp, y = fitted2))
+    } else {
+      plotObject <- plotObject + geom_line(data = df2, aes(x = temp, y = fitted1)) +
+        geom_line(data = df2, aes(x = temp, y = fitted2), linetype = "dashed")
+    }
+    
+    if(!is.null(x$bootstraps) & fit == "LS") {
+      plotObject <- plotObject + geom_ribbon(data = bounds, aes(x = temp, ymin = lower, ymax = upper), alpha = .4)
+    } else if(!heating & !cooling & !tempOnly) {
+      plotObject <- plotObject + geom_ribbon(aes(x = temp, ymin = lower, ymax = upper), alpha = .4)
+    } else if(tempOnly) {
+      plotObject <- plotObject + geom_smooth(aes(x = temp, y = energy), method = "lm", col = "black")
+    }
+    
+    return(plotObject)
+  } else if(attr(x, "type") == "double") {
+    
+    #Or else we have a double fit...
+    x1 <- x[[1]]
+    x2 <- x[[2]]
+    
+    #Make the energy & temp into a data frame for ggplot
+    df1 <- x1$data
+    df1$group <- 1
+    df2 <- x2$data
+    df2$group <- 2
+    dfboth <- rbind(df1, df2)
+    
+    #Look for heating/cooling
+    heating <- !is.null(df1$xHeating)
+    cooling <- !is.null(df1$xCooling)
+    
+    #Make another data frame of fitted values for ggplot
+    tmin <- min(c(df1$temp, df2$temp))
+    tmax <- max(c(df1$temp, df2$temp))
+    ts <- seq(from = tmin, to = tmax, length.out = 100)
+    df1x <- data.frame("temp" = ts, "energy" = 1)
+    x1$formula <- formula(energy ~ temp)
+    df1x$fitted <- predict(x1, df1x)
+    df1x$group <- 1
+    
+    df2x <- data.frame("temp" = ts, "energy" = 1)
+    x2$formula <- formula(energy ~ temp)
+    df2x$fitted <- predict(x2, df2x)
+    df2x$group <- 2
+    
+    plotObject <- ggplot(dfboth) + theme_bw() + 
+      geom_point(aes(x = temp, y = energy, col = factor(group))) + 
+      geom_line(data = df1x, aes(x = temp, y = fitted, col = factor(group))) +
+      geom_line(data = df2x, aes(x = temp, y = fitted, col = factor(group))) +
+      ggtitle(paste("Energy by Mean OAT, Change Point\nDouble Change Point Model")) +
+      xlab("Mean OAT (F)") + ylab("Energy (kWh)") +
+      scale_colour_discrete(name = "Assigned Mode")
+    plotObject
+    return(plotObject)
+    
+  }
+  
+}
+
+resids <- function(x, ...) UseMethod("resids")
+
+resids.cplm <- function(x, var) {
+  #Pull out the formula from the original object, should fit new data
+  mf <- model.frame(x$formula, x$dataOrig)
+  energy <- model.response(mf, "numeric")
+  
+  df <- x$dataOrig
+  df$resids <- energy - predict(x, x$dataOrig)
+  
+  ggplot(df, aes_string(x = var, y = "resids")) + theme_bw() + 
+    geom_point() + geom_smooth(se = FALSE) + 
+    ggtitle(paste("Residuals from Mean Weather-Based Usage")) + 
+    xlab(var) + ylab("Observed Energy - Expected from Weather")
+}
+
+
