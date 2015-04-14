@@ -4,7 +4,7 @@
 \alias{residsPlot}
 \title{Plot Residuals from a Change Point Linear Model}
 \usage{
-residsPlot(x, var)
+residsPlot(x, ...)
 }
 \arguments{
 \item{x}{a 'cplm' object}
@@ -16,7 +16,10 @@ residsPlot(x, var)
 A ggplot object
 }
 \description{
-Plot Residuals from a Change Point Linear Model
+Note that this is a generic, currently with a method for
+S3 class 'cplm'. The vision is that once variable base degree day
+& Bayesian methodologies are developed there will also be methods
+to plot the residuals from those models.
 }
 \examples{
 data(ecotope)

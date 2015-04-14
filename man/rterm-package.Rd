@@ -11,6 +11,9 @@ perform regressions of building energy use data on outdoor temperature
 and variables derived from outdoor temperature. This includes a 
 frequentist change-point model, a frequentist variable-base-degree-day model,
 and a Bayesian change-point model. All models apply to heating, cooling, or both.
+
+This current, in-progress implementation contains the frequentist change 
+point method. Other models will become available as development continues.
 }
 \details{
 \tabular{ll}{
@@ -51,5 +54,13 @@ mod <- cplm(kwhd ~ oat, data = ecotope)
 coef(mod)
 plot(mod)
 resids(mod, "dateEnd") # Weather-adjusted time trend
+
+
+# Ductless Heat Pump Study
+data(dhp)
+results <- cplmx(kwhd ~ avetemp, data = dhp,
+                   id_vars = c("id", "post"))
+summary(results)
+plot(results, "heatingChangePoint")
 
 }

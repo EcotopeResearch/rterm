@@ -4,7 +4,7 @@
 \alias{coef.cplm}
 \title{Change Point Linear Model Coefficients}
 \usage{
-\method{coef}{cplm}(x, fit = NULL)
+\method{coef}{cplm}(x, fit = NULL, silent = FALSE)
 }
 \arguments{
 \item{x}{a 'cplm' object}

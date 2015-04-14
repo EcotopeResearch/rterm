@@ -22,7 +22,7 @@ cplm(formula, data, weights, heating = NULL, cooling = NULL, se = TRUE,
 
 \item{nreps}{number of bootstrap replicates, defaults to 200}
 
-\item{parametric}{specify true for a parametric bootstrap, FALSE for a
+\item{parametric}{specify TRUE for a parametric bootstrap, FALSE for a
 non-parametric bootstrap. Defaults to parametric for < 100 observations,
 non-parametric for >= 100 observations}
 
