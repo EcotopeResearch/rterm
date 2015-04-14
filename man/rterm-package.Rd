@@ -53,7 +53,7 @@ data(ecotope)
 mod <- cplm(kwhd ~ oat, data = ecotope)
 coef(mod)
 plot(mod)
-resids(mod, "dateEnd") # Weather-adjusted time trend
+residsPlot(mod, "dateEnd") # Weather-adjusted time trend
 
 
 # Ductless Heat Pump Study

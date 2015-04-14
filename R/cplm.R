@@ -38,7 +38,7 @@ cplmx <- function(formula, data, id_vars, heating = NULL, cooling = NULL, se = F
   namesFull <- c("baseLoad", "heatingSlope", "coolingSlope", "slope", "intercept",
                  "heatingChangePoint", "coolingChangePoint")
 
-  allCoefs <- ddply(data, id_vars, function(x) {
+  allCoefs <- plyr::ddply(data, id_vars, function(x) {
     modTmp <- cplm(formula, x, se = FALSE)
     coefTmp <- coef(modTmp, silent = TRUE)
     
@@ -62,10 +62,10 @@ cplmx <- function(formula, data, id_vars, heating = NULL, cooling = NULL, se = F
 
 plot.cplmx <- function(x, var) {
   
-  ggplot(x$coefs) + theme_bw() + 
-    geom_histogram(aes_string(x = var), fill = "grey") + 
-    ggtitle(paste("Distribution of", var)) + 
-    xlab(var)
+  ggplot2::ggplot(x$coefs) + ggplot2::theme_bw() + 
+    ggplot2::geom_histogram(ggplot2::aes_string(x = var), fill = "grey") + 
+    ggplot2::ggtitle(paste("Distribution of", var)) + 
+    ggplot2::xlab(var)
   
 }
 
@@ -681,24 +681,24 @@ plot.cplm <- function(x, fit = NULL) {
     } 
     
     plotObject <- ggplot2::ggplot(df) + ggplot2::theme_bw() + 
-      ggplot2::geom_point(aes(x = temp, y = energy)) + 
+      ggplot2::geom_point(ggplot2::aes(x = temp, y = energy)) + 
       ggplot2::ggtitle(paste("Energy by Mean OAT")) +
       ggplot2::xlab("Mean OAT (F)") + ggplot2::ylab("Energy (kWh)")
     
     if(fit == "LS") {
-      plotObject <- plotObject + ggplot2::geom_line(data = dfLs, aes(x = temp, y = fitted))
+      plotObject <- plotObject + ggplot2::geom_line(data = dfLs, ggplot2::aes(x = temp, y = fitted))
     } else if(fit == "L1") {
-      plotObject <- plotObject + ggplot2::geom_line(data = dfL1, aes(x = temp, y = fitted))
+      plotObject <- plotObject + ggplot2::geom_line(data = dfL1, ggplot2::aes(x = temp, y = fitted))
     } else {
-      plotObject <- plotObject + ggplot2::geom_line(data = df2, aes(x = temp, y = fitted, linetype = Fit))
+      plotObject <- plotObject + ggplot2::geom_line(data = df2, ggplot2::aes(x = temp, y = fitted, linetype = Fit))
     }
 
     if(!is.null(x$bootstraps) & fit == "LS") {
-      plotObject <- plotObject + ggplot2::geom_ribbon(data = bounds, aes(x = temp, ymin = lower, ymax = upper), alpha = .4)
+      plotObject <- plotObject + ggplot2::geom_ribbon(data = bounds, ggplot2::aes(x = temp, ymin = lower, ymax = upper), alpha = .4)
     } else if(tempOnly) {
-      plotObject <- plotObject + ggplot2::geom_smooth(aes(x = temp, y = energy), method = "lm", col = "black")
+      plotObject <- plotObject + ggplot2::geom_smooth(ggplot2::aes(x = temp, y = energy), method = "lm", col = "black")
     } else if(!heating & !cooling) {
-      plotObject <- plotObject + ggplot2::geom_ribbon(aes(x = temp, ymin = lower, ymax = upper), alpha = .4)
+      plotObject <- plotObject + ggplot2::geom_ribbon(ggplot2::aes(x = temp, ymin = lower, ymax = upper), alpha = .4)
     } 
     
     return(plotObject)
@@ -734,9 +734,9 @@ plot.cplm <- function(x, fit = NULL) {
     df2x$group <- 2
     
     plotObject <- ggplot2::ggplot(dfboth) + ggplot2::theme_bw() + 
-      ggplot2::geom_point(aes(x = temp, y = energy, col = factor(group))) + 
-      ggplot2::geom_line(data = df1x, aes(x = temp, y = fitted, col = factor(group))) +
-      ggplot2::geom_line(data = df2x, aes(x = temp, y = fitted, col = factor(group))) +
+      ggplot2::geom_point(ggplot2::aes(x = temp, y = energy, col = factor(group))) + 
+      ggplot2::geom_line(data = df1x, ggplot2::aes(x = temp, y = fitted, col = factor(group))) +
+      ggplot2::geom_line(data = df2x, ggplot2::aes(x = temp, y = fitted, col = factor(group))) +
       ggplot2::ggtitle(paste("Energy by Mean OAT, Change Point\nDouble Change Point Model")) +
       ggplot2::xlab("Mean OAT (F)") + ggplot2::ylab("Energy (kWh)") +
       ggplot2::scale_colour_discrete(name = "Assigned Mode")
@@ -780,7 +780,7 @@ residsPlot.cplm <- function(x, var) {
   df <- x$dataOrig
   df$resids <- energy - predict(x, x$dataOrig)
   
-  ggplot2::ggplot(df, aes_string(x = var, y = "resids")) + ggplot2::theme_bw() + 
+  ggplot2::ggplot(df, ggplot2::aes_string(x = var, y = "resids")) + ggplot2::theme_bw() + 
     ggplot2::geom_point() + ggplot2::geom_smooth(se = FALSE) + 
     ggplot2::ggtitle(paste("Residuals from Mean Weather-Based Usage")) + 
     ggplot2::xlab(var) + ggplot2::ylab("Observed Energy - Expected from Weather")
