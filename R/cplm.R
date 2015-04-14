@@ -648,7 +648,6 @@ plot.cplm <- function(x, fit = NULL) {
     dfL1$fitted <- predict(x, dfLs, "L1")
     df2 <- rbind(dfLs, dfL1)
     
-  
     
     #If we have some bootstrap results...
     if(!is.null(x$bootstraps) & fit == "LS") {
@@ -666,9 +665,18 @@ plot.cplm <- function(x, fit = NULL) {
         dfTmp
       }))
       
-      bounds <- plyr::ddply(bootDf, .(temp), function(x) {
-        c("mean" = mean(x$fitted), "se" = sd(x$fitted))
-      })
+      bounds <- do.call('rbind', by(bootDf, bootDf$temp, function(x) {
+        data.frame("temp" = x$temp[1],
+                    "mean" = mean(x$fitted, na.rm = TRUE), 
+                   "se" = sd(x$fitted, na.rm = TRUE))
+      }))
+
+      
+#       bounds <- plyr::ddply(bootDf, .(temp), function(x) {
+#         c("mean" = mean(x$fitted, na.rm = TRUE), 
+#           "se" = sd(x$fitted, na.rm = TRUE))
+#       })
+
       #ggplot(bounds) + theme_bw() + geom_line(aes(x = temp, y = mean))
       bounds$lower <- bounds$mean - 2 * bounds$se
       bounds$upper <- bounds$mean + 2 * bounds$se
