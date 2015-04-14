@@ -3,8 +3,10 @@
 #include <R_ext/BLAS.h>
 #include <R_ext/Linpack.h>
 #include <R_ext/Lapack.h>
+#include <stdio.h>
 
 #include "changePoint.h"
+
 
 
 SEXP add(SEXP a, SEXP b) {
@@ -147,8 +149,6 @@ int multXTy(char *trans, double *X, int nrowX, int ncolX, double *y, double *z) 
 
 //Multiply a matrix X' %*% X
 int multXTX(double *X, int nrowX, int ncolX, double *Y) {
-  int incx = 1;
-  
   double alpha = 1.0;
   double beta = 0.0;
   
@@ -217,7 +217,7 @@ heating/cooling, and a pointer to double for the change point that will be writt
 with the optimum.*/
 int findChangePointC(double *temp, int n, double *energy, double *w, double *cp, int heating, int cooling) {
   double ssBest, ssTmp, tmin1, tmin2, tmax1, tmax2;
-  int i, j, k;
+  int i, heatcool;
   double tstepLarge = 1;
   double tstepSmall = 0.1;
   double tstep2 = 1;
@@ -229,7 +229,6 @@ int findChangePointC(double *temp, int n, double *energy, double *w, double *cp,
   tmin2 = 55;
   tmax2 = 90;
   int nCps = heating + cooling;
-  int heatcool;
   if(nCps == 1) {
     if(heating) {
       heatcool = 1; 
@@ -238,7 +237,9 @@ int findChangePointC(double *temp, int n, double *energy, double *w, double *cp,
       tmin1 = 55;
       tmax1 = 90;
     }
-  } 
+  } else {
+    heatcool = 0;
+  }
 
   //Set up an array to hold truncated basis function vars for heating/cooling
   //for the regression.
@@ -340,7 +341,7 @@ double findBestChangePoint(double *X, int n, double *temp, double *energy, doubl
       ssTmp = ssError(X, energy, n, p, betahat);
 
       //Check if the sum of squared errors is better
-      if(ssBest == 0 & betahat[1] >= 0) {
+      if(ssBest == 0 && betahat[1] >= 0) {
         ssBest = ssTmp;
         cp[0] = tmin1;
       } else if(betahat[1] >= 0) {
@@ -440,7 +441,7 @@ SEXP l1_path(SEXP temp, SEXP energy, SEXP cps, SEXP lambdas) {
 
 //Do an l1 penalized changepoint model. Return heating/cooling
 SEXP cpl1(SEXP temp, SEXP energy, SEXP lambdax) {
-  double mse_cur, mse_best, th_best, tc_best, lambda, ss_tmp, fitted;
+  double mse_cur, mse_best, lambda, ss_tmp, fitted;
   double xmax1, xmax2;
 
   //Read some inputs
@@ -453,7 +454,8 @@ SEXP cpl1(SEXP temp, SEXP energy, SEXP lambdax) {
   double tmin = 40;
   double tmax = 80;
   double tstep = 1;
-  double tstep2 = .1;
+  double th_best = 0;
+  double tc_best = 0;
   
   //Allocate space for xHeating and xCooling variables
   double *xHeating = malloc(n * sizeof(double));
@@ -841,6 +843,7 @@ int resampleIndexes(int *ind, int n) {
     indTmp = floor(rand() / randMax * n);
     ind[i] = indTmp;
   }
+  return 0;
 }
 
 
@@ -849,7 +852,6 @@ int changePointRegression(double *temp, int n, double *energy, double *w, int he
   int nCps = heating + cooling;
   int p = 1 + nCps;
   int i;
-  double lambda = 0;
   
   //Allocate space for change points, regression coefs, model matrix, & tmp var
   double *cp = malloc(nCps * sizeof(double));
@@ -954,6 +956,7 @@ int simulateData(double *temp, int n, double *energyNew, int heating, int coolin
     energyNew[i] += rnorm1(0.0, sigma);
   }
   
+  return 0;
 }
 
 //Box Muller transform for a normal random variable
@@ -961,7 +964,7 @@ double rnorm1(double mu, double sigma) {
   const double pi = 3.141592653589793;
   double u1 = rand() * (1.0 / RAND_MAX);
   double u2 = rand() * (1.0 / RAND_MAX);
-  double z0 = sqrt(-2.0 * log(u1)) * cos(2 * PI * u2);
+  double z0 = sqrt(-2.0 * log(u1)) * cos(2 * pi * u2);
   
   return z0 * sigma + mu;
 }

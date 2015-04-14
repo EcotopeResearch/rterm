@@ -4,13 +4,40 @@
 
 #Wraps cplm to perform many change point linear models 
 #on a dataset with many buildings
+#' Fit Multiple Change Point Linear Models from a Single Dataset
+#' 
+#' This function (change point linear model "extended") wraps \code{\link{cplm}} 
+#' for a dataset with multiple buildings.
+#' 
+#' @param formula a formula as would be used in a linear model
+#' @param data the dataset to perform the regression with
+#' @param weights an optional vector of observation weights, if non-NULL will use these for weighted least squares
+#' @param heating optional to force evaluation of a heating change point 
+#' @param cooling optional to force evaluation of a cooling change point
+#' @param se estimate standard errors with a bootstrap re-sampling technique
+#' @param nreps number of bootstrap replicates, defaults to 200
+#' @param parametric specify true for a parametric bootstrap, FALSE for a 
+#'   non-parametric bootstrap. Defaults to parametric for < 100 observations,
+#'   non-parametric for >= 100 observations
+#' @param lambda optional override for L1 penalty. Modifies the mean-squared
+#'   error from a full least-squares fit. Larger values correspond to larger
+#'   penalties. A value of 0 corresponds to ordinary least-squares.
+#' 
+#' @return The coefficients from the change point linear model w/ specified 
+#'  fitting method.
+#'  
+#' @examples
+#' data(dhp)
+#' results <- cplmx(kwhd ~ avetemp, data = dhp, id_vars = c("id", "post"))
+#' 
+#' 
 cplmx <- function(formula, data, id_vars, heating = NULL, cooling = NULL, se = FALSE, lambda = 0) {
   namesFull <- c("baseLoad", "heatingSlope", "coolingSlope", "slope",
                  "heatingChangePoint", "coolingChangePoint")
   
   allCoefs <- do.call('rbind', by(data, data[id_vars], function(x) {
     modTmp <- cplm(formula, x, heating = NULL, cooling = NULL, se = FALSE, lambda = 0)
-    coefTmp <- coef(modTmp)
+    coefTmp <- coef(modTmp, silent = TRUE)
     notFound <- setdiff(namesFull, names(coefTmp))
     toReturn <- c(x[1, id_vars], coefTmp)
     if(length(notFound)) {
@@ -37,7 +64,51 @@ plotone.cplmdf <- function(x, ...) {
 
 
 #The basic change point linear model function.
-cplm <- function(formula, data, weights, heating = NULL, cooling = NULL, se = TRUE, doubleMode = FALSE, nreps = 200, parametric = NULL, lambda = 0) {
+#' Fit a change point linear model
+#' 
+#' Given a formula and data frame, this function will by default 
+#' look for heating and cooling with an L1 penalized least-squares
+#' regression, then based on those results fit an ordinary least-
+#' squares regression of the selected model.
+#' 
+#' 
+#' @param formula a formula as would be used in a linear model
+#' @param data the dataset to perform the regression with
+#' @param weights an optional vector of observation weights, if non-NULL will use these for weighted least squares
+#' @param heating optional to force evaluation of a heating change point 
+#' @param cooling optional to force evaluation of a cooling change point
+#' @param se estimate standard errors with a bootstrap re-sampling technique
+#' @param nreps number of bootstrap replicates, defaults to 200
+#' @param parametric specify true for a parametric bootstrap, FALSE for a 
+#'   non-parametric bootstrap. Defaults to parametric for < 100 observations,
+#'   non-parametric for >= 100 observations
+#' @param lambda optional override for L1 penalty. Modifies the mean-squared
+#'   error from a full least-squares fit. Larger values correspond to larger
+#'   penalties. A value of 0 corresponds to ordinary least-squares.
+#'   
+#' @return
+#' An object of class 'cplm'. Contains the original data.frame as 'dataOrig', 
+#' the model formula, the regression data.frame w/ truncated basis vars as 'data',
+#' Least-Squares coefficients as 'LS', L1 penalized coefficients as 'L1', and 
+#' optionally a data.frame of 'bootstraps' if se = TRUE.
+#' 
+#' The following methods have been implemented for the 'cplm' class:
+#' print, coef, predict, plot, resids
+#' 
+#' @examples
+#' data(rfm)
+#' mod <- cplm(eui ~ oat, data = rfm)
+#' summary(mod)
+#' coef(mod, "LS")
+#' coef(mod, "L1")
+#' plot(mod)
+#' 
+#' @seealso \code{\link{plot.cplm}} to plot model output,
+#'   \code{\link{residsPlot}} to plot residuals energy use (net of weather),
+#'   \code{\link{summary.cplm}} to report coefficients + standard errors
+#'     if calculated.
+#' 
+cplm <- function(formula, data, weights, heating = NULL, cooling = NULL, se = TRUE, nreps = 200, parametric = NULL, lambda = 0) {
   
   #Bunch of stuff pasted from the lm code... parses the formula, data, subset, weights
   mf <- match.call(expand.dots = FALSE)
@@ -51,6 +122,9 @@ cplm <- function(formula, data, weights, heating = NULL, cooling = NULL, se = TR
   weights <- as.vector(model.weights(mf))
   temp <- model.matrix(mt, mf)
   temp <- temp[, -1]
+
+  # Artifact...
+  doubleMode = FALSE
   
   #Check if we have weights
   if(is.null(weights)) {
@@ -66,7 +140,7 @@ cplm <- function(formula, data, weights, heating = NULL, cooling = NULL, se = TR
   
   #Set the parametric/non-parametric...
   if(is.null(parametric)) {
-    if(nrow(data) < 50) {
+    if(nrow(data) < 100) {
       parametric <- TRUE
     } else {
       parametric <- FALSE
@@ -279,16 +353,35 @@ print.cplm <- function(x) {
 #   toPrint
 }
 
-coef.cplm <- function(x, fit = NULL) {
+
+#' Change Point Linear Model Coefficients
+#' 
+#' @param x a 'cplm' object
+#' @param fit an optional specification of coefficient type "LS" or "L1". If 
+#'   not specified returns the best-guess as to which is more appropriate. 
+#'   (The presence of outlying bills trips the standard output to the penalized 
+#'   "L1" fit)
+#' 
+#' @return The coefficients from the change point linear model w/ specified 
+#'  fitting method.
+#'  
+#' @examples
+#' data(rfm)
+#' mod <- cplm(eui ~ oat, data = rfm)
+#' coef(mod)
+#' coef(mod, "L1")
+#' coef(mod, "LS")
+#' 
+coef.cplm <- function(x, fit = NULL, silent = FALSE) {
   if(is.null(fit)) {
     fit <- attr(mod, "fit")
   }
     
   if(fit == "LS") {
-    print("Least Squares Coefficients:")
+    if(!silent) print("Least Squares Coefficients:")
     return(x$LS[!is.na(x$LS)])
   } else {
-    print("L1 Penalized Least Squares Coefficients:")
+    if(!silent) print("L1 Penalized Least Squares Coefficients:")
     return(x$L1[!is.na(x$LS)])
   }  
 
@@ -298,7 +391,7 @@ coef.cplm <- function(x, fit = NULL) {
 annual <- function(x) UseMethod("annual")
 
 annual.cplm <- function(x, type = "observed") {
-  coefs <- coef(x)
+  coefs <- coef(x, silent = TRUE)
   if(is.na(coefs['baseLoad'])) {
     stop("Cannot Annualize A Fit W/ No Base Load")
   } else {
@@ -366,7 +459,7 @@ predict.cplm <- function(object, newdata, fit = NULL) {
     fit <- attr(object, "fit")
   }
   
-  coefs <- coef(object, fit)
+  coefs <- coef(object, fit, silent = TRUE)
   
   
   if(!is.na(coefs['slope'])) {
@@ -392,33 +485,55 @@ predict.cplm <- function(object, newdata, fit = NULL) {
 }
 
 
+
+
+#' Plot Change Point Linear Model
+#' 
+#' @param x a 'cplm' object
+#' @param fit an optional specification of coefficient type "LS" or "L1". If 
+#'   not specified returns the best-guess as to which is more appropriate. 
+#'   (The presence of outlying bills trips the standard output to the penalized 
+#'   "L1" fit.) Additionally specifying "both" here will overlay both fits.
+#' 
+#' @return A ggplot object
+#'  
+#' @examples
+#' data(rfm)
+#' mod <- cplm(eui ~ oat, data = rfm)
+#' plot(mod)
+#' plot(mod, "both")
+#' 
+#' @seealso \code{\link{residsPlot}} to plot residuals (this is the fun part
+#'   anyway - looking at trends net of weather)
+#' 
 plot.cplm <- function(x, fit = NULL) {
   
   #Check if this is a single or a double fit
   #if(attr(x, "type") == "single") {
   if(1) {
-    
     if(is.null(fit)) {
       fit <- attr(x, "fit")
     }
     #Make the energy & temp into a data frame for ggplot
     df <- x$data
-    
+        
     #Look for heating/cooling
     heating <- !is.null(df$xHeating)
     cooling <- !is.null(df$xCooling)
-    tempOnly <- "slope" %in% names(coef(x$mod))
+    tempOnly <- "slope" %in% names(coef(x$mod, silent = TRUE))
     
+    x$formula <- formula(energy ~ temp)
     #Make another data frame of fitted values for ggplot
     tmin <- min(df$temp)
     tmax <- max(df$temp)
     ts <- seq(from = tmin, to = tmax, length.out = 100)
-    df2 <- data.frame("temp" = ts, "energy" = 1)
-    x$formula <- formula(energy ~ temp)
-    df2$fitted1 <- predict(x, df2, "LS")
-    df2$fitted2 <- predict(x, df2, "L1")
-
+    dfLs <- data.frame("temp" = ts, "energy" = 1, "Fit" = "Least-Squares")
+    dfLs$fitted <- predict(x, dfLs, "LS")
+    dfL1 <- data.frame("temp" = ts, "energy" = 1, "Fit" = "L1 Penalized")
+    dfL1$fitted <- predict(x, dfLs, "L1")
+    df2 <- rbind(dfLs, dfL1)
     
+  
     
     #If we have some bootstrap results...
     if(!is.null(x$bootstraps) & fit == "LS") {
@@ -456,12 +571,11 @@ plot.cplm <- function(x, fit = NULL) {
       ggplot2::xlab("Mean OAT (F)") + ggplot2::ylab("Energy (kWh)")
     
     if(fit == "LS") {
-      plotObject <- plotObject + ggplot2::geom_line(data = df2, aes(x = temp, y = fitted1))
+      plotObject <- plotObject + ggplot2::geom_line(data = dfLs, aes(x = temp, y = fitted))
     } else if(fit == "L1") {
-      plotObject <- plotObject + ggplot2::geom_line(data = df2, aes(x = temp, y = fitted2))
+      plotObject <- plotObject + ggplot2::geom_line(data = dfL1, aes(x = temp, y = fitted))
     } else {
-      plotObject <- plotObject + ggplot2::geom_line(data = df2, aes(x = temp, y = fitted1)) +
-        ggplot2::geom_line(data = df2, aes(x = temp, y = fitted2), linetype = "dashed")
+      plotObject <- plotObject + ggplot2::geom_line(data = df2, aes(x = temp, y = fitted, linetype = Fit))
     }
     
     if(!is.null(x$bootstraps) & fit == "LS") {
@@ -518,9 +632,32 @@ plot.cplm <- function(x, fit = NULL) {
   
 }
 
-resids <- function(x, ...) UseMethod("resids")
 
-resids.cplm <- function(x, var) {
+
+#' Plot Residuals from a Change Point Linear Model
+#' 
+#' Note that this is a generic, currently with a method for 
+#' S3 class 'cplm'. The vision is that once variable base degree day
+#' & Bayesian methodologies are developed there will also be methods
+#' to plot the residuals from those models.
+#' 
+#' @param x a 'cplm' object
+#' @param var variable name to plot against in the dataset used to 
+#'   fit the model.
+#' 
+#' @return A ggplot object
+#'  
+#' @examples
+#' data(ecotope)
+#' mod <- cplm(kwhd ~ oat, data = ecotope)
+#' residsPlot(mod, "dateEnd")
+#' 
+#' 
+#' @seealso \code{\link{plot.cplm}} 
+#' 
+residsPlot <- function(x, ...) UseMethod("residsPlot")
+
+residsPlot.cplm <- function(x, var) {
   #Pull out the formula from the original object, should fit new data
   mf <- model.frame(x$formula, x$dataOrig)
   energy <- model.response(mf, "numeric")
