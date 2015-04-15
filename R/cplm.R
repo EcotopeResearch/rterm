@@ -39,7 +39,15 @@ cplmx <- function(formula, data, id_vars, heating = NULL, cooling = NULL, se = F
                  "heatingChangePoint", "coolingChangePoint")
 
   allCoefs <- plyr::ddply(data, id_vars, function(x) {
-    modTmp <- cplm(formula, x, se = FALSE)
+    if(nrow(x) < 3) {
+      print(paste("Too few observations in", x[1, id_vars]))
+      return(NULL)
+    }
+    modTmp <- try(cplm(formula, x, se = FALSE))
+    if(!inherits(modTmp, "cplm")) {
+      print(paste("Error in", x[1, id_vars]))
+      return(NULL)
+    }
     coefTmp <- coef(modTmp, silent = TRUE)
     
     toReturn <- lapply(namesFull, function(name) {
@@ -198,6 +206,10 @@ cplm <- function(formula, data, weights, heating = NULL, cooling = NULL, se = TR
 
   # Artifact...
   doubleMode = FALSE
+  
+  if(sum(energy, na.rm = TRUE) <= 0) {
+    stop("Error, no energy use found")
+  }
   
   #Check if we have weights
   if(is.null(weights)) {
@@ -706,7 +718,7 @@ plot.cplm <- function(x, fit = NULL) {
     } else if(tempOnly) {
       plotObject <- plotObject + ggplot2::geom_smooth(ggplot2::aes(x = temp, y = energy), method = "lm", col = "black")
     } else if(!heating & !cooling) {
-      plotObject <- plotObject + ggplot2::geom_ribbon(ggplot2::aes(x = temp, ymin = lower, ymax = upper), alpha = .4)
+      #plotObject <- plotObject + ggplot2::geom_ribbon(ggplot2::aes(x = temp, ymin = lower, ymax = upper), alpha = .4)
     } 
     
     return(plotObject)

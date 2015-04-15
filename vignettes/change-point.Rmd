@@ -9,6 +9,10 @@ vignette: >
   \usepackage[utf8]{inputenc}
 ---
 
+```{r, echo = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
 ## Introduction to cplm
 
 For building energy use data, a change point model fits energy use as a piecewise linear function of outdoor temperature. Typically, there will be some region of flat "base-load", at temperatures for which space conditioning is unnecessary, as well as a linear relationship between temperature and heating, temperature and cooling, or both. 
@@ -39,23 +43,92 @@ plot(mod)
 
 In the first line in which we assign a change point linear model (cplm) fit to the object mod, we have specified that we want daily kWh ("kwhd") as a function of mean outdoor air temperature ("oat"). Run the regression on the "ecotope" dataset, and fit the model with heating but not cooling. The last bit ("se = FALSE") instructs cplm to not calculate standard errors.
 
+For those of you playing at home, we fit the model with a brute force search over a plausible range of change point(s), currently in Fahrenheit but with a future extension to Celsius as well. At each change point (or combination of change point if there is both heating and cooling) we fit a least squares model and record the residual mean squared error. The optimal change point(s) configuration has the lowest residual mean squared error. This is all done under the hood in C, calling linear algebra routines from linpack and lapack for speed. Note that this is really only useful if it's fast!
 
-Given a model of heating/cooling/both/neither, here is how we fit a model. Obviously if you think the model is "neither" -- no temperature dependence to the energy use -- then you just take the average energy use and don't really need this R package. However, for the other cases...
+"cplm" has been defined as an S3 class, with methods for many of the familiar S3 generics. Examples:
 
+
+```{r, echo=TRUE}
+coef(mod)
+head(predict(mod, ecotope))
+```
+
+
+
+## Calculating & Reporting Standard Errors
+
+The rub with the change point regression model for building energy use data is that it is not differentiable. What does that mean? Well, it most practically means that we cannot access coefficient standard errors in the usual way. We also can't use likelihood ratio tests to assess significance of heating or cooling, which will be discussed more in the next section.
+
+The two figures below show an example of what we mean by a non-differentiable regression model, specifically that the likelihood function is not "smooth". 
+
+The first graphic shows energy vs temperature for an example dataset (in this case a home in the NW United States that has been retrofitted with a heat pump). 
+
+The second graphic plots maximum likelihood as a function of heating change point. The dashed vertical lines indicate the average temperature of a data point (utility bill). We can see that every time the change point crosses the average temperature associated with a bill there is a discontinuity in the slope of the likelihood function. When the change point crosses a data point, the classification of that point switches -- in this case between base-load and heating. This is an abrupt jump, not a continuous transition, and so the likelihood function is not smooth.
+
+
+```{r, echo=FALSE, results='asis', fig.width=7, fig.height=5}
+data(dhp)
+data2 <- dhp[dhp$id == "10244" & dhp$post == 0, ]
+ggplot(data2) + theme_bw() + 
+  geom_point(aes(x = avetemp, y = kwhd)) + 
+  ggtitle("Change Point Example Data (Data from DHP)") +
+  xlab("Average Outdoor Temperature (F)") +
+  ylab("Daily kWh") + xlim(35, 70)
+```
+
+```{r, echo=FALSE, results='asis', fig.width=7, fig.height=5}
+Ts <- seq(from = 35, to = 70, by = .01)
+LLs <- sapply(Ts, function(T) {
+  xTmp <- makeCpVar(data2$avetemp, T)
+  as.numeric(logLik(lm(data2$kwhd ~ xTmp)))
+})
+df <- data.frame(Ts, LLs)
+pf <- ggplot(df) + geom_line(aes(x = Ts, y = LLs)) + theme_bw() +
+  ggtitle("Change Point Example Maximum Likelihood (Data from DHP)\nVertically Dashed Lines Indicate Data Points") +
+  xlab("Change Point (F)") +
+  ylab("Log Likelihood of Regression Model") + xlim(35, 70)
+for(i in 1:nrow(data2)) {
+  pf <- pf + geom_vline(xintercept = data2$avetemp[i], linetype = "dashed")
+}
+print(pf)
+```
+
+As a high-level comment, note that classical statistics takes derivatives, and Bayesian statistics takes integrals. The tease here is that, with a likelihood that is non-differentiable -- but integrable! -- we're eventually moving to Bayesian implementations.
+
+Anyway, lacking an obvious analytical method to calculate standard errors while acknowledging uncertainty in estimating the change point itself, we turn to numeric methods. (It is not best practices to estimate the change point, then pretend that you knew it the whole time and read standard errors from the lm output.) The discontinuities in the likelihood slope would seem to make numerical derivatives flaky and unreliable, so we use a bootstrap instead.
+
+There are two sorts of bootstraps: parametric, and non-parametric. Both are implemented in cplm, although it defaults to parametric and you should only use non-parametric with a bunch of data.
+
+The parametric bootstrap accepts the fitted model as truth -- the baseload, heating/cooling change points and slopes, and residual standard error -- and then iterates from that model, simulating data and calculating the new fit. The non-parametric bootstrap resamples from the original dataset with replacement. In the example below you see that the non-parametric bootstrap is more sensitive to the unusually low outlying points (maybe a vacation?), whereas the parametric bootstrap absorbed that variation as a slight increase in the residual standard error.  Since constant variance residuals around a change-point mean model is rarely a perfect match for a building, the non-parametric bootstrap probably gives you a better idea of the variability, although with a small amount of data it loses interpretability. (Suppose you had one bill per month for a year. The non-parametric bootstrap may give you 3 Januaries and 0 Junes... what to make of that?)
+
+
+```{r, echo = TRUE, fig.width=7, fig.height=5}
+data(baseboard)
+mod1 <- cplm(Service ~ OAT, data = baseboard, parametric = TRUE)
+summary(mod1)
+plot(mod1)
+mod2 <- cplm(Service ~ OAT, data = baseboard, parametric = FALSE)
+summary(mod2)
+plot(mod2)
+```
+
+The plot method for a cplm object by default puts a 95% interval around the estimated mean model, as based on the bootstrap replicates. The summary method reports a standard error for each coefficient, as well as upper and lower 95% quantiles from the bootstrap replicates (you can see where the distributions are skewed). You can also access the estimated coefficients from the bootstrap replicates directly:
+
+```{r}
+head(mod1$bootstraps)
+```
 
 ## Model selection
 
-Often one knows in advance whether the energy use for a given building contains a heating signature, cooling signature, or both. For example, a home in a cold climate with an electric furnace is extremely likely to show increased energy at cold temperatures! 
+Often one knows in advance whether the energy use for a given building contains a heating signature, cooling signature, or both. For example, a home in a cold climate with an electric furnace is extremely likely to show increased energy at cold temperatures, or an office building in Houston had sure better show cooling or the occupants are miserable!
 
-However, if one is conducting a study with many buildings, or if one is unsure as to the magnitude of a heating/cooling load, it can be a bit cumbersome to have a person investigate and manually select heating/cooling/both/neither. Ideally we would perform model selection as usual in a regression model, with the output standard errors & p-values, or with a Likelihood Ratio Test. However, we don't have the necessary regularity conditions for any of that jazz to really be applicable.
-
-
-This model is non-differentiable. High-level comment: classical statistics takes derivatives, Bayesian statistics takes integrals. The tease here is that, with a likelihood that is non-differentiable -- but integrable! -- we're eventually moving to Bayesian implementations.
-
+However, if one is conducting a study with many buildings, or if one is unsure as to the magnitude of a heating/cooling load, it can be a bit cumbersome to have a person investigate and manually select heating/cooling/both/neither. Ideally we would perform model selection as usual in a regression model, with the output standard errors & p-values, or with a Likelihood Ratio Test. However, as discussed above, we don't have the necessary regularity conditions for any of that jazz to really be applicable.
 
 The basic problem with fitting least-squares when the full model is unknown, is that when given the opportunity to fit the full model with an elbow for heating and an elbow for cooling, least-squares wants to do stupid things. It's like it checks the prime directive: Overfit!! 
 
 Staying within the whole frequentist-ish paradigm for now, one logical means of deterring least-squares from overfitting is to introduce a penalty. There is an extensive literature on penalized regression, but you could probably refer to The Elements of Statistical Learning by Hastie, Tibshirani, and Friedman. In this scenario we fit least squares subject to a constraint on the coefficient magnitudes of the heating and cooling slopes. Basically, the model has to pay a "price" to put in a heating or cooling slope, and so it only pays that price if there's a big pay-off. If it's just two datapoints at the edge of the temperature range... that's not going to be worth the price of admission. (In this case putting a cooling slope in Seattle)
+
+
 
 
 ```{r, echo=TRUE, results='asis', fig.width = 7, fig.height=5}
@@ -64,10 +137,45 @@ plot(mod, "both")
 ```
 
 
+Under the hood, cplm always fits both a least-squares and an L1 penalized least squares. Unless you manually specify heating/cooling/both, cplm will start by fitting an L1 penalized least-squares, then based on the non-zero heating/cooling coefficients fit the corresponding least-squares model and return it. In the graphic above we can see that, had we left heating & cooling blank, the L1 method would have selected heating only, and we would have returned the least-squares heating-only fit. You can always access either set of coefficients, although by default the preferred fit is located as the "fit" attribute of the cplm object. 
+
+```{r, echo = TRUE}
+mod <- cplm(kwhd ~ oat, data = ecotope)
+attr(mod, "fit")
+coef(mod)
+coef(mod, "LS")
+coef(mod, "L1")
+```
+
+Currently there are two scenarios in which the preferred fit will switch from least-squares to the L1 penalized least-squares: 
+
+1. There are outlying energy use entries, defined as more than 3.5 standard deviations from the mean. High-leverage single points can make a least-squares fit -- especially one with elbows -- produce models that will provide really, really bad predictions.
+1. The least-squares heating/cooling slope is greater than 5x the corresponding L1 penalized least-squares slope. In general, if the least-squares slope is way higher than the L1 slope that means that least-squares did something crazy and you don't want it in your results.
+
+In some senses these two criteria are trying to get at the same problem, which is a least-squares fit that would provide misleading generalizations if you were to use it without thorough investigation. An example is below.
+
+```{r, fig.width=7, fig.height=5}
+mod <- cplm(kwhd ~ avetemp, data = dhp[dhp$id == "11184" & dhp$post == 0, ])
+plot(mod, "both")
+```
+
+It is not clear whether the lone, extremely high usage interval represents some real, inflated usage, a compensatory read for some previous under-billed period, or just a crazy-town data error. In a study with many sites you may choose to discard cases such as this (if you're paying close enough attention). Here cplm kind of bails you out, in that the alternate model returned should provide at the very least feasible generalizations. Whether you believe those generalizations or want them influencing your results is another question, but cplm will do you a solid and not by default return the bonkers least-squares fit.
+
 ## Fitting a bunch of change point models
 
 It may be that you have a dataset with many buildings. There is a wrapper function for cplm called cplmx.
 
+
+```{r, fig.width=7, fig.height=5}
+data(dhp)
+head(dhp)
+results <- cplmx(kwhd ~ avetemp, data = dhp,
+                   id_vars = c("id", "post"))
+summary(results)
+plot(results, "heatingChangePoint")
+```
+
+The cplmx function returns an object of class cplmx. The summary method for that object currently reports the model selection. This example was from a ductless heat pump retrofit study in the NW United States, so it is expected that we would see mainly heating. There are also quite a few cases where we did not detect a change point...
 
 
 ## Looking at residuals
@@ -75,33 +183,11 @@ It may be that you have a dataset with many buildings. There is a wrapper functi
 This is the fun part, anyway. Typically you want to investigate something about building energy use net of weather. We can do that by taking the residuals from the change point regression.
 
 
-
-## Figures
-
-The figure sizes have been customised so that you can easily put two images side-by-side. 
-
-```{r, fig.show='hold'}
-plot(1:10)
-plot(10:1)
+```{r, fig.width = 7, fig.height = 5}
+data(ecotope)
+mod <- cplm(kwhd ~ oat, data = ecotope)
+residsPlot(mod, "dateEnd")
 ```
 
-You can enable figure captions by `fig_caption: yes` in YAML:
+Here at the Ecotope office, our weather-adjusted energy use bottomed-out around 2010, and has been steadily climbing since. Notice how closely this parallels the Seattle area real-estate market. This may be a case where correlation = causality: booming real estate market causes Ecotope to hire engineers, said engineers occupy the building and increase the energy use. Lol.
 
-    output:
-      rmarkdown::html_vignette:
-        fig_caption: yes
-
-Then you can use the chunk option `fig.cap = "Your figure caption."` in **knitr**.
-
-## More Examples
-
-You can write math expressions, e.g. $Y = X\beta + \epsilon$, footnotes^[A footnote here.], and tables, e.g. using `knitr::kable()`.
-
-```{r, echo=FALSE, results='asis'}
-knitr::kable(head(mtcars, 10))
-```
-
-Also a quote using `>`:
-
-> "He who gives up [code] safety for [code] speed deserves neither."
-([via](https://twitter.com/hadleywickham/status/504368538874703872))
