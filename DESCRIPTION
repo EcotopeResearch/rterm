@@ -8,6 +8,8 @@ Description: An implementation of frequentist and Bayesian models for weather-ad
 		performing statistical inference with building energy use data.
 Depends: R (>= 3.1.0)
 License: GPL-2
-Imports:
+Imports: 
 	plyr,
 	ggplot2
+Suggests: knitr
+VignetteBuilder: knitr

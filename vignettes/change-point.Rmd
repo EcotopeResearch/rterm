@@ -1,0 +1,107 @@
+---
+title: "Frequentist Change Point Models"
+author: "Michael Logsdon"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+---
+
+## Introduction to cplm
+
+For building energy use data, a change point model fits energy use as a piecewise linear function of outdoor temperature. Typically, there will be some region of flat "base-load", at temperatures for which space conditioning is unnecessary, as well as a linear relationship between temperature and heating, temperature and cooling, or both. 
+
+
+Let's start with an example from the Ecotope office energy use dataset. The data contains a start and end date for the bill and the corresponding days of service. The energy use has been converted to daily kWh in the field "kwhd", and mean outdoor temperature "oat" has been derived from a weather file. The dataset looks as below:
+
+```
+library(rterm)
+data(ecotope)
+head(ecotope)
+```
+
+```{r, echo=FALSE, results='asis'}
+library(rterm)
+data(ecotope)
+knitr::kable(head(ecotope, 10))
+```
+
+
+Suppose now that we know that the cooling load in Seattle is minimal to nonexistent, but that the heating load is very real and should be observable. We want to fit a change point model to the Ecotope office energy that consists of a base load and an elbow for heating. This will both illustrate what a change point model looks like, and also introduce you to the syntax of the function "cplm", which is meant to look a lot like R's "lm" function, for convenience.
+
+
+```{r, echo=TRUE, results='asis', fig.width=7, fig.height=5}
+mod <- cplm(kwhd ~ oat, data = ecotope, heating = TRUE, cooling = FALSE, se = FALSE)
+plot(mod)
+```
+
+In the first line in which we assign a change point linear model (cplm) fit to the object mod, we have specified that we want daily kWh ("kwhd") as a function of mean outdoor air temperature ("oat"). Run the regression on the "ecotope" dataset, and fit the model with heating but not cooling. The last bit ("se = FALSE") instructs cplm to not calculate standard errors.
+
+
+Given a model of heating/cooling/both/neither, here is how we fit a model. Obviously if you think the model is "neither" -- no temperature dependence to the energy use -- then you just take the average energy use and don't really need this R package. However, for the other cases...
+
+
+## Model selection
+
+Often one knows in advance whether the energy use for a given building contains a heating signature, cooling signature, or both. For example, a home in a cold climate with an electric furnace is extremely likely to show increased energy at cold temperatures! 
+
+However, if one is conducting a study with many buildings, or if one is unsure as to the magnitude of a heating/cooling load, it can be a bit cumbersome to have a person investigate and manually select heating/cooling/both/neither. Ideally we would perform model selection as usual in a regression model, with the output standard errors & p-values, or with a Likelihood Ratio Test. However, we don't have the necessary regularity conditions for any of that jazz to really be applicable.
+
+
+This model is non-differentiable. High-level comment: classical statistics takes derivatives, Bayesian statistics takes integrals. The tease here is that, with a likelihood that is non-differentiable -- but integrable! -- we're eventually moving to Bayesian implementations.
+
+
+The basic problem with fitting least-squares when the full model is unknown, is that when given the opportunity to fit the full model with an elbow for heating and an elbow for cooling, least-squares wants to do stupid things. It's like it checks the prime directive: Overfit!! 
+
+Staying within the whole frequentist-ish paradigm for now, one logical means of deterring least-squares from overfitting is to introduce a penalty. There is an extensive literature on penalized regression, but you could probably refer to The Elements of Statistical Learning by Hastie, Tibshirani, and Friedman. In this scenario we fit least squares subject to a constraint on the coefficient magnitudes of the heating and cooling slopes. Basically, the model has to pay a "price" to put in a heating or cooling slope, and so it only pays that price if there's a big pay-off. If it's just two datapoints at the edge of the temperature range... that's not going to be worth the price of admission. (In this case putting a cooling slope in Seattle)
+
+
+```{r, echo=TRUE, results='asis', fig.width = 7, fig.height=5}
+mod <- cplm(kwhd ~ oat, data = ecotope, heating = TRUE, cooling = TRUE)
+plot(mod, "both")
+```
+
+
+## Fitting a bunch of change point models
+
+It may be that you have a dataset with many buildings. There is a wrapper function for cplm called cplmx.
+
+
+
+## Looking at residuals
+
+This is the fun part, anyway. Typically you want to investigate something about building energy use net of weather. We can do that by taking the residuals from the change point regression.
+
+
+
+## Figures
+
+The figure sizes have been customised so that you can easily put two images side-by-side. 
+
+```{r, fig.show='hold'}
+plot(1:10)
+plot(10:1)
+```
+
+You can enable figure captions by `fig_caption: yes` in YAML:
+
+    output:
+      rmarkdown::html_vignette:
+        fig_caption: yes
+
+Then you can use the chunk option `fig.cap = "Your figure caption."` in **knitr**.
+
+## More Examples
+
+You can write math expressions, e.g. $Y = X\beta + \epsilon$, footnotes^[A footnote here.], and tables, e.g. using `knitr::kable()`.
+
+```{r, echo=FALSE, results='asis'}
+knitr::kable(head(mtcars, 10))
+```
+
+Also a quote using `>`:
+
+> "He who gives up [code] safety for [code] speed deserves neither."
+([via](https://twitter.com/hadleywickham/status/504368538874703872))

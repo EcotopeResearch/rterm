@@ -7,10 +7,7 @@ Temperature-Energy Regression Models for Energy Use in Buildings
 }
 \description{
 This package contains functions to 
-perform regressions of building energy use data on outdoor temperature 
-and variables derived from outdoor temperature. This includes a 
-frequentist change-point model, a frequentist variable-base-degree-day model,
-and a Bayesian change-point model. All models apply to heating, cooling, or both.
+perform regressions of building energy use data on outdoor temperature and variables derived from outdoor temperature. This will eventually include a  frequentist change-point model, a frequentist variable-base-degree-day model, and a Bayesian change-point model. All models apply to heating, cooling, or both.
 
 This current, in-progress implementation contains the frequentist change 
 point method. Other models will become available as development continues.
@@ -37,8 +34,8 @@ References to come later
 
 \keyword{ package }
 \seealso{
-~~ Optional links to other man pages, e.g. ~~
-~~ \code{\link[<pkg>:<pkg>-package]{<pkg>}} ~~
+\code{\link[rterm:cplm]{cplm}}
+\code{\link[rterm:cplmx]{cplmx}}
 }
 \examples{
 # Architecture Office in Bremerton
@@ -63,4 +60,14 @@ results <- cplmx(kwhd ~ avetemp, data = dhp,
 summary(results)
 plot(results, "heatingChangePoint")
 
+
+# Metered Home w/ Baseboard Heat
+data(baseboard)
+mod <- cplm(Service ~ OAT, data = baseboard)
+plot(mod) + 
+  geom_point(data = baseboard, aes(OAT, Baseboard), col = "blue")
+
+
+
 }
+
