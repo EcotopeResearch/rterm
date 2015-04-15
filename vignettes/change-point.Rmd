@@ -69,11 +69,11 @@ The second graphic plots maximum likelihood as a function of heating change poin
 ```{r, echo=FALSE, results='asis', fig.width=7, fig.height=5}
 data(dhp)
 data2 <- dhp[dhp$id == "10244" & dhp$post == 0, ]
-ggplot(data2) + theme_bw() + 
-  geom_point(aes(x = avetemp, y = kwhd)) + 
-  ggtitle("Change Point Example Data (Data from DHP)") +
-  xlab("Average Outdoor Temperature (F)") +
-  ylab("Daily kWh") + xlim(35, 70)
+ggplot2::ggplot(data2) + ggplot2::theme_bw() + 
+  ggplot2::geom_point(ggplot2::aes(x = avetemp, y = kwhd)) + 
+  ggplot2::ggtitle("Change Point Example Data (Data from DHP)") +
+  ggplot2::xlab("Average Outdoor Temperature (F)") +
+  ggplot2::ylab("Daily kWh") + ggplot2::xlim(35, 70)
 ```
 
 ```{r, echo=FALSE, results='asis', fig.width=7, fig.height=5}
@@ -83,12 +83,13 @@ LLs <- sapply(Ts, function(T) {
   as.numeric(logLik(lm(data2$kwhd ~ xTmp)))
 })
 df <- data.frame(Ts, LLs)
-pf <- ggplot(df) + geom_line(aes(x = Ts, y = LLs)) + theme_bw() +
-  ggtitle("Change Point Example Maximum Likelihood (Data from DHP)\nVertically Dashed Lines Indicate Data Points") +
-  xlab("Change Point (F)") +
-  ylab("Log Likelihood of Regression Model") + xlim(35, 70)
+pf <- ggplot2::ggplot(df) + 
+  ggplot2::geom_line(aes(x = Ts, y = LLs)) + ggplot2::theme_bw() +
+  ggplot2::ggtitle("Change Point Example Maximum Likelihood (Data from DHP)\nVertically Dashed Lines Indicate Data Points") +
+  ggplot2::xlab("Change Point (F)") +
+  ggplot2::ylab("Log Likelihood of Regression Model") + ggplot2::xlim(35, 70)
 for(i in 1:nrow(data2)) {
-  pf <- pf + geom_vline(xintercept = data2$avetemp[i], linetype = "dashed")
+  pf <- pf + ggplot2::geom_vline(xintercept = data2$avetemp[i], linetype = "dashed")
 }
 print(pf)
 ```
