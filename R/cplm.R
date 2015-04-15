@@ -548,10 +548,10 @@ summary.cplm <- function(object, ...) {
       sd(object$bootstraps[, coef])
     })
     lower95s <- sapply(names(coefs), function(coef) {
-      as.numeric(quantile(object$bootstraps[, coef], .05))
+      as.numeric(quantile(object$bootstraps[, coef], .05, na.rm = TRUE))
     })
     upper95s <- sapply(names(coefs), function(coef) {
-      as.numeric(quantile(object$bootstraps[, coef], .95))
+      as.numeric(quantile(object$bootstraps[, coef], .95, na.rm = TRUE))
     })
     df <- data.frame("Estimate" = coefs, "Standard.Error" = ses, 
                      "Lower.95" = lower95s, "Upper.95" = upper95s)
