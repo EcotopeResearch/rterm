@@ -84,7 +84,8 @@ LLs <- sapply(Ts, function(T) {
 })
 df <- data.frame(Ts, LLs)
 pf <- ggplot2::ggplot(df) + 
-  ggplot2::geom_line(aes(x = Ts, y = LLs)) + ggplot2::theme_bw() +
+  ggplot2::geom_line(ggplot2::aes(x = Ts, y = LLs)) + 
+  ggplot2::theme_bw() +
   ggplot2::ggtitle("Change Point Example Maximum Likelihood (Data from DHP)\nVertically Dashed Lines Indicate Data Points") +
   ggplot2::xlab("Change Point (F)") +
   ggplot2::ylab("Log Likelihood of Regression Model") + ggplot2::xlim(35, 70)
