@@ -268,7 +268,9 @@ int findChangePointC(double *temp, int n, double *energy, double *w, double *cp,
   ssTmp = ssError(X2, energy, n, 2, betahat);
   if(ssTmp < ssBest) {
     cp[0] = 0;
-    cp[1] = 0;
+    if(nCps == 2) {
+      cp[1] = 0;
+    }
   } else {
        
     //Set the parameters for the second, fine search
@@ -594,6 +596,7 @@ SEXP cpl1(SEXP temp, SEXP energy, SEXP lambdax) {
   free(betahat);
   free(w);
   free(cp);
+  free(X);
   return results;
 }
 
@@ -829,6 +832,8 @@ SEXP bootstrapChangePoint(SEXP temp, SEXP energy, SEXP weights, SEXP nreps, SEXP
   UNPROTECT(1);
   free(coefs);
   free(ind);
+  free(cTemp2);
+  free(cEnergy2);
   return results;
 }
 
