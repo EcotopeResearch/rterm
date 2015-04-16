@@ -57,11 +57,9 @@ head(predict(mod, ecotope))
 
 ## Calculating & Reporting Standard Errors
 
-The rub with the change point regression model for building energy use data is that it is not differentiable. What does that mean? Well, it most practically means that we cannot access coefficient standard errors in the usual way. We also can't use likelihood ratio tests to assess significance of heating or cooling, which will be discussed more in the next section.
+The rub with the change point regression model for building energy use data is that it is not differentiable. What does that mean? Well, it most practically means that we cannot estimate coefficients and standard errors in the usual way. We also can't use likelihood ratio tests to assess significance of heating or cooling, which will be discussed more in the next section.
 
-The two figures below show an example of what we mean by a non-differentiable regression model, specifically that the likelihood function is not "smooth". 
-
-The first graphic shows energy vs temperature for an example dataset (in this case a home in the NW United States that has been retrofitted with a heat pump). 
+The two figures below show an example of what we mean by a non-differentiable regression model, specifically that the likelihood function is not "smooth". The first graphic shows energy vs temperature for an example dataset (in this case a home in the NW United States that has been retrofitted with a heat pump). 
 
 The second graphic plots maximum likelihood as a function of heating change point. The dashed vertical lines indicate the average temperature of a data point (utility bill). We can see that every time the change point crosses the average temperature associated with a bill there is a discontinuity in the slope of the likelihood function. When the change point crosses a data point, the classification of that point switches -- in this case between base-load and heating. This is an abrupt jump, not a continuous transition, and so the likelihood function is not smooth.
 
