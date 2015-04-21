@@ -13,6 +13,7 @@ Imports:
 	ggplot2,
   httr,
   jsonlite,
-  dplyr
+  dplyr,
+  tidyr
 Suggests: knitr
 VignetteBuilder: knitr
