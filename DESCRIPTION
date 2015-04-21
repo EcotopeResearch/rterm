@@ -10,6 +10,9 @@ Depends: R (>= 3.1.0)
 License: GPL-2
 Imports: 
 	plyr,
-	ggplot2
+	ggplot2,
+  httr,
+  jsonlite,
+  dplyr
 Suggests: knitr
 VignetteBuilder: knitr

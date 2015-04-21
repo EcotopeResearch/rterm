@@ -1,35 +1,46 @@
 #Weather Data Functions...
 
+key <- "mgPWFcAfmzIrHjXlacsksLXkhajnyFDp"
 
-getGHCN <- function(ID) {
-  #Read in the country info
-  countriesURL <- getURL("ftp://ftp.ncdc.noaa.gov/pub/data/ghcn/daily/ghcnd-countries.txt")
-  ct <- readLines(textConnection(countriesURL))
-  countryCode <- gsub("^([A-Z]+) (.+)$", "\\1", ct)
-  countryName <- gsub("^([A-Z]+) (.+)$", "\\2", ct)
-  countryName <- rev(gsub("^ *(.+)$", "\\1", rev(countryName)))
-  countries <- data.frame("country" = countryName, "code" = countryCode)
+read.noaa <- function(table, param = NULL) {
+  if(!is.null(param)) {
+    urlx <- paste("http://www.ncdc.noaa.gov/cdo-web/api/v2/", table, "?", param, sep = "")  
+  } else {
+    urlx <- paste("http://www.ncdc.noaa.gov/cdo-web/api/v2/", table, sep = "")  
+  }
+  print(paste("Attempting to query:", urlx))
+  tmp <- httr::GET(urlx, httr::add_headers(token = key))
+  jsonlite::fromJSON(httr::content(tmp, "text"))$results
+}
 
-  #Read in the station info
-  stations <- getURL("ftp://ftp.ncdc.noaa.gov/pub/data/ghcn/daily/ghcnd-stations.txt")
-  ts <- read.fwf(file = textConnection(stations),
-                 widths = c(11, -1, 8, -1, 9, -1, 6, -1, 2, -1, 30, -1, 3, -1, 3, -1, 5),fill = TRUE)
-  names(ts) <- c("id", "lat", "lon", "elev", "state", "name", "gsnFlag", "hcnFlag", "wmoid")
-  head(ts)
-  
-  ts$elev[ts$elev == "-999.9"] <- NA
-  
-  st <- read.table(text = stations, header = FALSE, strip.white = TRUE, fill = TRUE)
-  
+# Here is a stationid... for testing...
+# stationid <- "GHCND:USW00024233"
+# startdate <- "2012-01-01"
+# enddate <- "2012-02-01"
 
-  urlTmp <- "ftp://ftp.ncdc.noaa.gov/pub/data/ghcn/daily/"  
-  fnames <- getURL(urlTmp)
-  
-  #download.file("ftp://ftp.ncdc.noaa.gov/pub/data/ghcn/daily/ghcnd-stations.txt", "stations.txt")
-  
 
+read.ghcn <- function(stationid, startdate, enddate) {
+  # Set-up the parameters for the call to NOAA
+  startdate <- as.character(startdate)
+  enddate <- as.character(enddate)
+  param <- paste0("datasetid=GHCND&",
+                  "stationid=", stationid, "&",
+                  "startdate=", startdate, "&",
+                  "enddate=", enddate, "&",
+                  "datatypeid=TMIN,TMAX&",
+                  "limit=1000")
   
-  st$country <- gsub("^([A-Z]+)[0-9].+$", "\\1", st$V1)
+  # Query the NOAA API for the data
+  dset <- read.noaa("data", param)
+  
+  # Clean it up and return
+  dset <- dset %>%
+    dplyr::mutate(date = as.Date(date)) %>%
+    dplyr::mutate(value = C_to_F(value / 10)) %>%
+    dplyr::select(date, value, datatype) %>%
+    tidyr::spread(datatype, value) %>%
+    dplyr::mutate(aveTemp = (TMIN + TMAX) / 2)
   
 }
 
+# test <- read.ghcn("GHCND:USW00024233", "2014-01-01", "2014-03-01")
