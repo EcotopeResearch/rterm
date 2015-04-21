@@ -1,16 +1,25 @@
 #Weather Data Functions...
-key <- "mgPWFcAfmzIrHjXlacsksLXkhajnyFDp"
+
 
 #' Read data from NOAA's Climate Data Online Web Services
 #' 
-#' See the following for documentation on constructing queries.
-#' \code{\link{http://www.ncdc.noaa.gov/cdo-web/webservices/v2}}, as
-#' well as the examples at the bottom.
+#' Queries NOAA's Web Services according to the following documentation:
+#' \url{http://www.ncdc.noaa.gov/cdo-web/webservices/v2}.
+#' 
+#' To use this function you need to get a key for NOAA's API. 
+#' This is free and you can generate one here: \url{https://www.ncdc.noaa.gov/cdo-web/token}.
+#' All weather functions in rterm look for an object in the global environment 
+#' called "noaa_key". You can deal with this by taking the following line:
+#' 
+#' noaa_key <- "your_key_here"
+#' 
+#' and placing it either before the library(rterm) statement, or, preferably, in 
+#' a .Rprofile that gets run when you load R. 
+#' \url{http://www.statmethods.net/interface/customizing.html}
+#' 
 #' By default the queries return only 25 entries with a maximum limit of
 #' 1000, so be mindful that often much of what you thought you were 
 #' querying is not returned.
-#' 
-#' To use this function you need to get a key for NOAA's API
 #' 
 #' @param table the data table to query from, examples include 
 #'  "locations", "stations", "data"
@@ -35,6 +44,10 @@ key <- "mgPWFcAfmzIrHjXlacsksLXkhajnyFDp"
 #'                                     "limit=1000", sep = "&"))
 #' 
 read.noaa <- function(table, param = NULL) {
+  if(!exists("noaa_key")) {
+    stop("Must have a noaa key to read weather data. See help(read.noaa)")
+  }
+  
   urlx <- paste("http://www.ncdc.noaa.gov/cdo-web/api/v2/", table, sep = "")  
   if(!is.null(param)) {
     urlx <- paste(urlx, "?", param, sep = "")  
@@ -43,6 +56,21 @@ read.noaa <- function(table, param = NULL) {
   print(paste("Attempting to query:", urlx))
   tmp <- httr::GET(urlx, httr::add_headers(token = noaa_key))
   jsonlite::fromJSON(httr::content(tmp, "text"))$results
+}
+
+read.noaa.json <- function(table, param = NULL) {
+  if(!exists("noaa_key")) {
+    stop("Must have a noaa key to read weather data. See help(read.noaa)")
+  }
+  
+  urlx <- paste("http://www.ncdc.noaa.gov/cdo-web/api/v2/", table, sep = "")  
+  if(!is.null(param)) {
+    urlx <- paste(urlx, "?", param, sep = "")  
+  } 
+  
+  print(paste("Attempting to query:", urlx))
+  tmp <- httr::GET(urlx, httr::add_headers(token = noaa_key))
+  jsonlite::fromJSON(httr::content(tmp, "text"))  
 }
 
 # Here is a stationid... for testing...
@@ -65,7 +93,8 @@ read.one.ghcn <- function(stationid, startdate, enddate) {
   # Query the NOAA API for the data
   dset <- read.noaa("data", param)
   if(is.null(dset)) {
-    stop("NOAA Query did not return results")
+    warning(paste("No data found from NOAA w/ param", param))
+    return(NULL)
   }
   
   # Clean it up and return
@@ -92,13 +121,18 @@ read.one.ghcn <- function(stationid, startdate, enddate) {
 #' gets raw data with the \code{\link{read.noaa}} function.
 #' 
 #' Two things to note: 1) you need a key from NOAA to access the data.
-#' This is free and you can generate one here: https://www.ncdc.noaa.gov/cdo-web/token.
+#' This is free and you can generate one here: \url{https://www.ncdc.noaa.gov/cdo-web/token}.
 #' All weather functions in rterm look for an object in the global environment 
-#' called "noaa_key", so you should probably
+#' called "noaa_key". You can deal with this by taking the following line:
+#' 
+#' noaa_key <- "your_key_here"
+#' 
+#' and placing it either before the library(rterm) statement, or, preferably, in 
+#' a .Rprofile. \url{http://www.statmethods.net/interface/customizing.html}
 #' 
 #' 2) You need to find a weather station to use! Probably the best way
 #' to do this for now is to use the NOAA web search at 
-#' http://www.ncdc.noaa.gov/cdo-web/search, where you search for 
+#' \url{http://www.ncdc.noaa.gov/cdo-web/search}, where you search for 
 #' "Daily Summaries" and "Stations" with the appropriate date range and a
 #' keyword. This will bring up a map where you can click on icons for weather
 #' stations and it will report an "ID" that looks something like
@@ -109,7 +143,7 @@ read.one.ghcn <- function(stationid, startdate, enddate) {
 #' @param enddate the last date of data requested
 #' 
 #' @return a data frame with variables "date", "TMIN", "TMAX", and 
-#'   "aveTemp"
+#'   "aveTemp". Temperatures in Fahrenheit
 #'   
 #' @seealso \code{\link{read.noaa}}
 #' 
@@ -135,6 +169,55 @@ read.ghcn <- function(stationid, startdate, enddate) {
     read.one.ghcn(stationid, stDate + (i - 1) * 365, min(edDate, stDate + i * 365 - 1))
   })
   
-  do.call('rbind', dsets)
+  dset <- do.call('rbind', dsets)
+  
+  if(is.null(dset)) return(NULL)
+  
+  # Fill in NA values...
+  allDates <- seq(from = min(dset$date), to = max(dset$date), by = 1)
+  isMissing <- setdiff(allDates, dset$date)
+  if(length(isMissing)) {
+    isMissing <- as.Date(isMissing, origin = "1970-01-01")
+    dset <- rbind(dset,
+                  data.frame("date" = isMissing, "TMIN" = NA, "TMAX" = NA, "aveTemp" = NA))
+  }
+  
+  return(dset)
+}
+
+
+
+calcDistance <- function(lat1, lon1, lat2, lon2) {
+  if(lat1 == lat2 & lon1 == lon2) {
+    return(0)
+  }
+  degRad<-pi/180
+  phi1 <- (90 - lat1) * degRad
+  phi2 <- (90 - lat2) * degRad
+  theta1 <- lon1 * degRad
+  theta2 <- lon2 * degRad
+  cosTotal <- sin(phi1) * sin(phi2) * cos(theta1 - theta2) + cos(phi1) * cos(phi2)
+  arc <- acos(cosTotal)
+  return(arc * 3960)
+}
+
+
+stationSearch <- function(lat, lon, nClosest = 5) {
+  stations$miles.distant <- sapply(1:nrow(stations), function(i) {
+    calcDistance(stations$latitude[i], stations$longitude[i], lat, lon)
+  })
+  stations <- arrange(stations, miles.distant)
+  head(stations, nClosest)  
+}
+
+stationCompare <- function(ids, startdate, enddate) {
+  dsets <- do.call("rbind", lapply(ids, function(id) {
+    dset <- read.ghcn(id, startdate, enddate)
+    if(!is.null(dset)) dset$id <- id
+    dset
+  }))
+  p <- ggplot(dsets) + geom_line(aes(date, aveTemp, col = id))
+  print(p)
+  list("data" = dsets, "plot" = p)
 }
 
