@@ -258,18 +258,18 @@ stationSearch <- function(name = NULL, lat = NULL, lon = NULL, nClosest = 5) {
 smoothTemps <- function(dset, days = 14, var = "aveTemp") {
   # Take a 2 week rolling mean for presentation
   fsmooth <- rep(1 / days, days)
-  dset <- plyr::ddply(dset, .(id), function(x) {
+  dset <- do.call('rbind', by(dset, dset$id, function(x) {
     x$maTemp <- filter(x[var], fsmooth, sides = 1)
     x
-  })
+  }))
   
   # Scale by the mean at each date, to make the 
   # comparison easier to see
-  dset <- plyr::ddply(dset, .(date), function(x) {
+  dset <- do.call('rbind', by(dset, dset$date, function(x) {
     x$scaledTemp <- scale(x$maTemp, center = TRUE, scale = FALSE)
     x$scaledTempRaw <- scale(x[var], center = TRUE, scale = FALSE)
     x
-  })
+  }))
   dset
 }
 
@@ -294,12 +294,15 @@ summary.stationComp <- function(sc) {
   #  1) Observed Data Fraction
   #  2) Degrees above or below average between selected stations
   
+
   dset <- smoothTemps(sc$data)
   
-  sumStats <- plyr::ddply(dset, .(id), function(x) {
-    c("dataFrac" = sum(!is.na(x$aveTemp)) / nrow(x),
-      "relativeTemp" = mean(x$scaledTempRaw, na.rm = TRUE))
-  })
+  sumStats <- do.call('rbind', by(dset, dset$id, function(x) {
+    data.frame("dataFrac" = sum(!is.na(x$aveTemp)) / nrow(x),
+      "relativeTemp" = mean(x$scaledTempRaw, na.rm = TRUE),
+      "id" = x$id[1])
+  }))
+  # print(sumStats)
   
   results <- merge(sc$stations, sumStats)
   
@@ -336,7 +339,7 @@ plot.stationComp <- function(sc, days = 14, var = "aveTemp", type = "relative") 
       ggplot2::geom_line(ggplot2::aes(x = date, y = maTemp, col = name)) +
       ggplot2::ggtitle(title1) +
       ggplot2::xlab("") + ggplot2::ylab(paste(title1, "F")) +
-      ggplot2::theme(legend.text = element_text(size = 7))
+      ggplot2::theme(legend.text = ggplot2::element_text(size = 7))
     
   } else if(type == "relative") {
     p <- ggplot2::ggplot(dset) + ggplot2::theme_bw() + 
@@ -344,7 +347,7 @@ plot.stationComp <- function(sc, days = 14, var = "aveTemp", type = "relative") 
       ggplot2::ggtitle(paste(title1, "\nRelative to Mean Temp by Date")) +
       ggplot2::xlab("") +
       ggplot2::ylab(paste(title1, "(F)\nrelative to mean for that date")) +
-      ggplot2::theme(legend.text = element_text(size = 7))    
+      ggplot2::theme(legend.text = ggplot2::element_text(size = 7))    
   }
 
   p
