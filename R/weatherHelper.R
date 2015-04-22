@@ -258,14 +258,14 @@ stationSearch <- function(name = NULL, lat = NULL, lon = NULL, nClosest = 5) {
 smoothTemps <- function(dset, days = 14, var = "aveTemp") {
   # Take a 2 week rolling mean for presentation
   fsmooth <- rep(1 / days, days)
-  dset <- ddply(dset, .(id), function(x) {
+  dset <- plyr::ddply(dset, .(id), function(x) {
     x$maTemp <- filter(x[var], fsmooth, sides = 1)
     x
   })
   
   # Scale by the mean at each date, to make the 
   # comparison easier to see
-  dset <- ddply(dset, .(date), function(x) {
+  dset <- plyr::ddply(dset, .(date), function(x) {
     x$scaledTemp <- scale(x$maTemp, center = TRUE, scale = FALSE)
     x$scaledTempRaw <- scale(x[var], center = TRUE, scale = FALSE)
     x
@@ -296,7 +296,7 @@ summary.stationComp <- function(sc) {
   
   dset <- smoothTemps(sc$data)
   
-  sumStats <- ddply(dset, .(id), function(x) {
+  sumStats <- plyr::ddply(dset, .(id), function(x) {
     c("dataFrac" = sum(!is.na(x$aveTemp)) / nrow(x),
       "relativeTemp" = mean(x$scaledTempRaw, na.rm = TRUE))
   })
