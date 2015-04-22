@@ -22,6 +22,10 @@ Step One: to get daily temperature data from NOAA you need to request a web serv
 noaa_key <- "your_key_here"
 ```
 
+```{r, echo=FALSE}
+noaa_key <- "mgPWFcAfmzIrHjXlacsksLXkhajnyFDp"
+```
+
 If you plan on using rterm, and specifically the functions to get weather data with any regularity, I would recommend putting that line assigning the noaa\_key into a .Rprofile file. These are loaded on startup. You can read more at http://www.statmethods.net/interface/customizing.html and https://stat.ethz.ch/R-manual/R-devel/library/base/html/Startup.html (although as usual the official R documentation is a bit unhelpful unless you are already familiar with the topics). Otherwise you can just set the key interactively in a session using rterm. Note that the package will throw a warning on attachment if it can't find a noaa\_key.
 
 Once you have a noaa_key in your workspace, you are ready to find and download some weather data!
@@ -166,8 +170,7 @@ read.noaa("data", paste("datasetid=GHCND",
                         "stationid=GHCND:USW00024233",
                         "startdate=2012-01-01",
                         "enddate=2012-01-10",
-                        "datatypeid=AWND",
-                        "limit=1000", sep = "&"))
+                        "datatypeid=AWND", sep = "&"))
 ```
 
 It's a bit clumsy, and often takes some trial and error to get what you're looking for. The 1000 record limit is a bit tough, as if a query would have resulted in more than 1000 numbers then it returns NULL instead. In addition datasets get returned in long form, where each row is a for a single value, so there will typically be some reshaping in post-processing.
@@ -178,8 +181,7 @@ read.noaa("data", paste("datasetid=GHCND",
                         "stationid=GHCND:USW00024233",
                         "startdate=2012-01-01",
                         "enddate=2012-01-05",
-                        "datatypeid=TMIN,TMAX",
-                        "limit=1000", sep = "&"))
+                        "datatypeid=TMIN,TMAX", sep = "&"))
 ```
 
 Hopefully that's enough to get you started!

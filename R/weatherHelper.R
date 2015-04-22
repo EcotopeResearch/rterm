@@ -247,7 +247,7 @@ stationSearch <- function(name = NULL, lat = NULL, lon = NULL, nClosest = 5) {
     stations$milesDistant <- sapply(1:nrow(stations), function(i) {
       calcDistance(stations$latitude[i], stations$longitude[i], lat, lon)
     })
-    stations <- arrange(stations, milesDistant)
+    stations <- plyr::arrange(stations, milesDistant)
     return(stations[1:nClosest, ])
   } else {
     stop("Must specify either a name to search on, or latitude/longitude coordinates. See help(stationSearch)")
