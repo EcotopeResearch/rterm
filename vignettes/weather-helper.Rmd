@@ -1,0 +1,185 @@
+---
+title: "Weather Helper"
+author: "Michael Logsdon"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+---
+
+## Getting Started
+
+We'll start with a trivial yet extremely important observation. There are two crucial data sources for weather adjusting the energy consumption of a building: the energy consumption itself, and the weather! 
+
+The rterm package comes with some tools to help with the acquisition of weather data, if you do not already have access to your own favorite source of temperature data (If you already have weather data you can skip this whole thing). The rterm package contains some functions that talk to NOAA's Web Services v2 API, and retrieve GHCN -- Global Historical Climatology Network -- daily temperature data. For reference, here is the web address with all of the documentation, although the instructions contained within this vignette should be enough to get going. https://www.ncdc.noaa.gov/cdo-web/webservices/v2.
+
+
+Step One: to get daily temperature data from NOAA you need to request a web services token. You can do that here. https://www.ncdc.noaa.gov/cdo-web/token. Enter your email address into the form and submit, and you'll receive a NOAA Web Services access token in your inbox. For the rterm functions that query NOAA Web Services to work, you need to assign the key to an object called noaa_key as follows:
+
+```{r}
+noaa_key <- "your_key_here"
+```
+
+If you plan on using rterm, and specifically the functions to get weather data with any regularity, I would recommend putting that line assigning the noaa\_key into a .Rprofile file. These are loaded on startup. You can read more at http://www.statmethods.net/interface/customizing.html and https://stat.ethz.ch/R-manual/R-devel/library/base/html/Startup.html (although as usual the official R documentation is a bit unhelpful unless you are already familiar with the topics). Otherwise you can just set the key interactively in a session using rterm. Note that the package will throw a warning on attachment if it can't find a noaa\_key.
+
+Once you have a noaa_key in your workspace, you are ready to find and download some weather data!
+
+
+## Searching for Weather Stations
+
+There are two basic ways to find a weather station appropriate for the building at hand. One is an interactive search at the NOAA website. You can find that here: http://www.ncdc.noaa.gov/cdo-web/search. Search for "Daily Summaries" and "Stations" with the appropriate date range and key word. It will bring up a map where you can click on icons for weather stations and view, among other details, an "ID" that should look something like "GHCND:US1WAKG0179". This is the identifier that you will need to query that station's data within rterm.
+
+The other way to search for stations (and their ID's, which you need to get their data!) is provided within rterm itself. The function stationSearch allows for searches either on name or on latitude/longitude pair. I'm writing this vignette at Ecotope's Seattle, Washington office at 4056 9th Avenue Northeast, which corresponds to latitude/longitude coordinates 47.6569326, -122.3184546, so let's try to find a good weather site to pair with the Ecotope Office billing data.
+
+
+```{r}
+library(rterm)
+stationSearch("seattle")
+```
+
+Searching for current-ish weather stations with "seattle" in the name returns three results. Sea-Tac airport, Boeing Field, and Sand Point. Note that stationSearch evaluates the name argument as a regular expression, for optional regex shenanigans. Also note that it's looking for "active" weather stations, that have reported data since 2010. This is to weed out the weather stations that were discontinued in 1920.
+
+We can see that stationSearch returns quite a bit of info! In addition to the name and id of the weather station, we get coordinates, elevation, date range, and data coverage. This comes from an internal dataset called "stations" that was built with rterm::read.noaa for the NOAA Web Services API. The code for that process can be found in data-raw/weather.R if you're interested.
+
+Alternately, let's try a search by coordinates.
+
+
+```{r}
+stationSearch(lat = 47.6569326, lon = -122.3184546)
+```
+
+Here we see, by default, the 5 closest weather stations (modify with the nClosest argument). This search picked up Sea-Tac, Boeing Field, and Sand Point, and in addition listed weather stations in Renton and Kent. Helpfully, the last variable reported is the distance in miles from the search coordinates to the weather station. We can see that, here at the Ecotope mothership we're about three and a half miles to [Sand Point](http://en.wikipedia.org/wiki/Sand_Point,_Seattle), which sounds about right because I think it's about a 5 mile bike ride on the popular [Burke Gilman Trail](http://en.wikipedia.org/wiki/Burke-Gilman_Trail). 
+
+
+## Exploring weather stations
+
+So we have identified some candidate weather stations that may be appropriate to link to the Ecotope Office Energy use, but how do we choose?
+
+One obvious and simple way is to choose the one that's close enough and has the highest data coverage. Data coverage refers the the fraction of data present in the dataset to possible data with records for every day. So for example if temperatures for 10% of days were missing for a station then that would be a data coverage of 0.9. We see that Sea-Tac International Airport has perfect data coverage, so perhaps we could just choose that one and move on.
+
+Not so fast my friend. Sea-Tac is a bit higher in elevation, and there are closer weather stations. To hopefully make the weather station selection more informed, we can compare the temperatures for the weather stations directly.
+
+
+```{r, fig.width=7,fig.height=5}
+stations <- stationSearch(lat = 47.6569326, lon = -122.3184546)
+comp <- stationCompare(stations, "2014-01-01", "2014-12-31")
+summary(comp)
+```
+
+The function stationCompare takes a dataset of stations (as returned by the stationSearch function), a date range, and returns an object of S3 class stationComp. The return value is actually just a list with entries for 1) ghcn data and 2) the associated station info, but defining the class lets us use the summary and plot methods, which hopefully makes it easier to remember how all this works. It's a bit slow to run as it's querying the v2 NOAA Web Services, and those are a bit slow.
+
+The summary variable "dataFrac"" refers to the data coverage over the specified interval. The "datacoverage"" reported by stationSearch is from the NOAA documentation and refers to overall data coverage, which may not necessarily be relevant to the time frame of your building. To find weather to pair with the Ecotope bills, we're more concerned with data coverage over the past few years than data coverage in 1965. 
+
+The field "relativeTemp"" summarizes the average degrees F for that weather station relative to the mean of all 5 weather stations. It stands out that Boeing Field read on average 1.3 degrees warmer than the average temperature of the 5 sites in question.
+
+The summary method takes a stab at which stations are preferable and sorts accordingly, so here it is suggesting Sand Point.
+
+### Visualizing the Different Weather Stations
+
+We can also plot the comparison. The default is to plot a 2-week rolling average temperature, scaled by the mean temperature across the sites in question. What really jumps out here is that the Kent station is missing quite a bit of data, and the Boeing Field station is quite a bit warmer than the others. We also saw that numerically with the summary, but pictures are quite helpful.
+
+
+```{r, fig.width=7, fig.height=5}
+plot(comp)
+```
+
+
+Suppose we want to elimate the Kent station, and investigate further.
+
+```{r}
+comp <- stationCompare(stations[1:4, ], "2014-01-01", "2014-12-31")
+```
+
+Specifying type = "actual" will show the actual temperatures rather than scaled temperatures, although this isn't typically as useful for visualizing the differences between stations.
+
+```{r, fig.width=7, fig.height=5}
+plot(comp, type = "actual")
+```
+
+We can change the number of days for the rolling mean with the "days" argument.
+
+```{r, fig.width=7, fig.height=5}
+plot(comp, days = 2)
+plot(comp, days = 60)
+```
+
+We can also change the variable. Our choices are "aveTemp", "tmin", or "tmax". The default comparison is to average temperature.
+
+```{r, fig.width=7, fig.height=5}
+plot(comp, var = "tmin")
+plot(comp, var = "tmax")
+```
+
+Mostly what we're getting out of this is that Boeing Field is uniformly 2 or so degrees warmer than the other stations. This may be due Boeing Field being a bit more isolated from the large bodies of water, along the Duwamish waterway between Lake Washington and Puget Sound. Sand Point and Renton are on the lake, and Sea-Tac is fairly close to the Sound. I'm just spitballing here, though. Regardless, the Ecotope office, close to the University of Washington and Lake Washington, probably shouldn't get matched with the Boeing Field weather. The Sand Point station seems most appropriate.
+
+In general I don't think you should put this much thought into selection of a weather station, but in the event of a tricky choice hopefully these materials make your decision somewhat more well-informed.
+
+
+## Downloading Data
+
+Whew, now that we have actually decided on a weather station -- Sand Point id "GHCND:USW00094290" -- here's how to retrieve the weather data with read.ghcn. Since we did all of the search and comparison stuff in this case we actually already have the data in the "data" object of the stationComp, but I think it makes more sense in general to do what you have to do to find the station, then store the id and use read.ghcn as necessary.
+
+
+```{r}
+weather <- read.ghcn("GHCND:USW00094290", "2014-01-01", "2014-12-31")
+head(weather)
+```
+
+This can be a bit slow, as it's always a bit slow to talk to the NOAA Web Services. In addition the query size limit ends up being about a year's worth of daily temperatures, so if you're requesting more than a year then read.ghcn sends multiple queries to get the requested range, one year at a time.
+
+## Extensions
+
+At some level, basically everything in here drills all the way down to a pretty simple function called read.noaa, that is essentially an R wrapper for the NOAA Web Services v2 API. Here we have customized and optimized to only care about recent-ish temperature data, although there is all sorts of information available.
+
+
+To do your own data scrounging, refer to the online documentation https://www.ncdc.noaa.gov/cdo-web/webservices/v2. The basic structure of read.noaa is to enter a table name string and an additional parameter string. 
+
+For example, this query shows available datasets. We are using the GHCND for our temperature-energy regressions.
+
+```{r}
+read.noaa("datasets")
+```
+
+Now suppose that we are interested in wind speed, and want to find wind speed data for the Seattle area. We need to find a wind speed datatype that will work for our purposes.
+
+```{r}
+read.noaa("datacategories", "sortorder=desc&limit=10")
+read.noaa("datatypes", "datacategoryid=WIND&limit=10")
+```
+
+It looks like "AWND", "Average daily wind speed (tenths of meters per second)" could be interesting. Let's try to find weather stations near Seattle that are recording "AWND". Perhaps to do that we should look for stations within Washington State, then see if any are near Seattle.
+
+
+```{r}
+read.noaa("locationcategories")
+read.noaa("locations", "locationcategoryid=ST&limit=5&sortorder=desc")
+stations <- read.noaa("stations", "locationid=FIPS:53&datatypeid=AWND&limit=1000")
+stations[grep("SEATTLE", stations$name), ]
+```
+
+Ah look, it's our old friends Sea-Tac, Boeing Field, and Sand Point!
+
+```{r}
+read.noaa("data", paste("datasetid=GHCND",
+                        "stationid=GHCND:USW00024233",
+                        "startdate=2012-01-01",
+                        "enddate=2012-01-10",
+                        "datatypeid=AWND",
+                        "limit=1000", sep = "&"))
+```
+
+It's a bit clumsy, and often takes some trial and error to get what you're looking for. The 1000 record limit is a bit tough, as if a query would have resulted in more than 1000 numbers then it returns NULL instead. In addition datasets get returned in long form, where each row is a for a single value, so there will typically be some reshaping in post-processing.
+
+
+```{r}
+read.noaa("data", paste("datasetid=GHCND",
+                        "stationid=GHCND:USW00024233",
+                        "startdate=2012-01-01",
+                        "enddate=2012-01-05",
+                        "datatypeid=TMIN,TMAX",
+                        "limit=1000", sep = "&"))
+```
+
+Hopefully that's enough to get you started!
