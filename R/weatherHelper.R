@@ -384,7 +384,7 @@ summary.stationComp <- function(sc) {
       dplyr::mutate(distInd = 1 - milesDistant / sum(milesDistant)) %>%
       dplyr::mutate(useIndex = (dataFrac + relTempScaled + distInd) / 3)
   }
-
+  print(results)
   results <- plyr::arrange(results, -useIndex)
   results <- results[, names(results) %in% c("id", "name", "milesDistant", "dataFrac", "relativeTemp")]
   results
