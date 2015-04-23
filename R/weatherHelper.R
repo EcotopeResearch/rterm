@@ -363,19 +363,20 @@ summary.stationComp <- function(sc) {
   #  2) Degrees above or below average between selected stations
   
   dset <- smoothTemps(sc$data)
-  
+  print(head(dset))
   sumStats <- do.call('rbind', by(dset, dset$id, function(x) {
     data.frame("dataFrac" = sum(!is.na(x$aveTemp)) / nrow(x),
       "relativeTemp" = mean(x$scaledTempRaw, na.rm = TRUE),
       "id" = x$id[1])
   }))
-  # print(sumStats)
+   print(sumStats)
   
   results <- merge(sc$stations, sumStats)
-  
+  print(results)
   results <- dplyr::mutate(results, 
                            relTempScaled = 1 - abs(relativeTemp) / sum(abs(relativeTemp)))
-  
+  print(results)
+  print(is.null(stations$milesDistant))
   if(is.null(stations$milesDistant)) {
     results <- results %>%
       dplyr::mutate(useIndex = (dataFrac + relTempScaled) / 2)
