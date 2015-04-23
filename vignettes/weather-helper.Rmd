@@ -4,7 +4,7 @@ author: "Michael Logsdon"
 date: "`r Sys.Date()`"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteIndexEntry{Weather Helper}
   %\VignetteEngine{knitr::rmarkdown}
   \usepackage[utf8]{inputenc}
 ---
@@ -66,7 +66,7 @@ One obvious and simple way is to choose the one that's close enough and has the 
 Not so fast my friend. Sea-Tac is a bit higher in elevation, and there are closer weather stations. To hopefully make the weather station selection more informed, we can compare the temperatures for the weather stations directly.
 
 
-```{r, fig.width=7,fig.height=5}
+```{r, fig.width=11,fig.height=8}
 stations <- stationSearch(lat = 47.6569326, lon = -122.3184546)
 comp <- stationCompare(stations, "2014-01-01", "2014-12-31")
 summary(comp)
@@ -85,7 +85,7 @@ The summary method takes a stab at which stations are preferable and sorts accor
 We can also plot the comparison. The default is to plot a 2-week rolling average temperature, scaled by the mean temperature across the sites in question. What really jumps out here is that the Kent station is missing quite a bit of data, and the Boeing Field station is quite a bit warmer than the others. We also saw that numerically with the summary, but pictures are quite helpful.
 
 
-```{r, fig.width=7, fig.height=5}
+```{r, fig.width=11, fig.height=8}
 plot(comp)
 ```
 
@@ -98,20 +98,20 @@ comp <- stationCompare(stations[1:4, ], "2014-01-01", "2014-12-31")
 
 Specifying type = "actual" will show the actual temperatures rather than scaled temperatures, although this isn't typically as useful for visualizing the differences between stations.
 
-```{r, fig.width=7, fig.height=5}
+```{r, fig.width=11, fig.height=8}
 plot(comp, type = "actual")
 ```
 
 We can change the number of days for the rolling mean with the "days" argument.
 
-```{r, fig.width=7, fig.height=5}
+```{r, fig.width=11, fig.height=8}
 plot(comp, days = 2)
 plot(comp, days = 60)
 ```
 
 We can also change the variable. Our choices are "aveTemp", "tmin", or "tmax". The default comparison is to average temperature.
 
-```{r, fig.width=7, fig.height=5}
+```{r, fig.width=11, fig.height=8}
 plot(comp, var = "tmin")
 plot(comp, var = "tmax")
 ```
