@@ -82,7 +82,7 @@ The summary method takes a stab at which stations are preferable and sorts accor
 
 ### Visualizing the Different Weather Stations
 
-We can also plot the comparison. The default is to plot a 2-week rolling average temperature, scaled by the mean temperature across the sites in question. What really jumps out here is that the Kent station is missing quite a bit of data, and the Boeing Field station is quite a bit warmer than the others. We also saw that numerically with the summary, but the graphics are quite helpful.
+We can also plot the comparison. The default is to plot a 2-week rolling average temperature, scaled by the mean temperature across the sites in question. What really jumps out here is that the Kent station is missing quite a bit of data, and the Boeing Field station is quite a bit warmer than the others. We also saw that numerically with the summary, but the graphics typically make these conclusions more clear.
 
 
 ```{r, fig.width=11, fig.height=8}
@@ -190,7 +190,7 @@ That was all a lot of exploration for what should be a fairly simple task. Let's
 
 1. Request a token from NOAA https://www.ncdc.noaa.gov/cdo-web/token, and put the following line in your .Rprofile (or load it interactively).
 
-```{r}
+```{r, eval=FALSE}
 noaa_key <- "your_key_here"
 ```
 
