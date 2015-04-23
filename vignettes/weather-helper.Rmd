@@ -102,17 +102,12 @@ Specifying type = "actual" will show the actual temperatures rather than scaled 
 plot(comp, type = "actual")
 ```
 
-We can increase the smoothing with the "days" argument to set a wider rolling mean.
+We can increase the smoothing with the "days" argument to set a wider rolling mean, or change the variable. Our choices are "aveTemp", "tmin", or "tmax". The default comparison is to average temperature.
 
 ```{r, fig.width=11, fig.height=8}
-plot(comp, days = 60)
+plot(comp, days = 60, var = "tmin")
 ```
 
-We can also change the variable. Our choices are "aveTemp", "tmin", or "tmax". The default comparison is to average temperature.
-
-```{r, fig.width=11, fig.height=8}
-plot(comp, var = "tmin")
-```
 
 Mostly what we're getting out of this is that Boeing Field is uniformly 2 or so degrees warmer than the other stations. This may be due Boeing Field being a bit more isolated from the large bodies of water, along the Duwamish waterway between Lake Washington and Puget Sound. Sand Point and Renton are on the lake, and Sea-Tac is fairly close to the Sound. I'm just spitballing here, though. Regardless, the Ecotope office, close to the University of Washington and Lake Washington, probably shouldn't get matched with the Boeing Field weather. The Sand Point station seems most appropriate.
 
@@ -188,27 +183,27 @@ Hopefully that's enough to get you started!
 
 That was all a lot of exploration for what should be a fairly simple task. Let's recap.
 
-1. Request a token from NOAA https://www.ncdc.noaa.gov/cdo-web/token, and put the following line in your .Rprofile (or load it interactively).
+- Request a token from NOAA https://www.ncdc.noaa.gov/cdo-web/token, and put the following line in your .Rprofile (or load it interactively).
 
 ```{r, eval=FALSE}
 noaa_key <- "your_key_here"
 ```
 
-2. Search for relevant stations with stationSearch
+- Search for relevant stations with stationSearch
 
 ```{r}
 stations <- stationSearch("Seattle")
 stations
 ```
 
-3. Choose the most appropriate station with stationCompare
+- Choose the most appropriate station with stationCompare
 
 ```{r}
 comp <- stationCompare(stations, "2014-01-01", "2014-06-01")
-# summary(comp)
+summary(comp)
 ```
 
-4. Read the weather data with read.ghcn
+- Read the weather data with read.ghcn
 
 ```{r}
 read.ghcn("GHCND:USW00094290", "2014-07-01", "2014-07-10")
@@ -216,5 +211,6 @@ read.ghcn("GHCND:USW00094290", "2014-07-01", "2014-07-10")
 
 
 ```{r, echo=FALSE}
-rm(noaa_key)
+ rm(noaa_key)
 ```
+
