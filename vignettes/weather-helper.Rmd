@@ -43,9 +43,9 @@ library(rterm)
 stationSearch("seattle")
 ```
 
-Searching for current-ish weather stations with "seattle" in the name returns three results. Sea-Tac airport, Boeing Field, and Sand Point. Note that stationSearch evaluates the name argument as a regular expression, for optional regex shenanigans. Also note that it's looking for "active" weather stations, that have reported data since 2010. This is to weed out the weather stations that were discontinued in 1920.
+Searching for current-ish weather stations with "seattle" in the name returns three results. Sea-Tac airport, Boeing Field, and Sand Point. Note that stationSearch evaluates the name argument as a regular expression, for optional regex shenanigans. Also note that it's looking for "active" weather stations, that have reported data since 2010. This is to weed out the weather stations that were discontinued in say 1920.
 
-We can see that stationSearch returns quite a bit of info! In addition to the name and id of the weather station, we get coordinates, elevation, date range, and data coverage. This comes from an internal dataset called "stations" that was built with rterm::read.noaa for the NOAA Web Services API. The code for that process can be found in data-raw/weather.R if you're interested.
+We can see that stationSearch returns quite a bit of info! In addition to the name and id of the weather station, we get coordinates, elevation, date range, and data coverage. This comes from an rterm package internal dataset called "stations" that was built with rterm::read.noaa for the NOAA Web Services API. The code for that process can be found in data-raw/weather.R if you're interested.
 
 Alternately, let's try a search by coordinates.
 
@@ -61,9 +61,9 @@ Here we see, by default, the 5 closest weather stations (modify with the nCloses
 
 So we have identified some candidate weather stations that may be appropriate to link to the Ecotope Office Energy use, but how do we choose?
 
-One obvious and simple way is to choose the one that's close enough and has the highest data coverage. Data coverage refers the the fraction of data present in the dataset to possible data with records for every day. So for example if temperatures for 10% of days were missing for a station then that would be a data coverage of 0.9. We see that Sea-Tac International Airport has perfect data coverage, so perhaps we could just choose that one and move on.
+One obvious and simple way is to choose the one that's close enough and has the highest data coverage. Data coverage refers the the fraction of data present across the entire date range of the station to the total possible data with records for every day. So for example if temperatures for 10% of days were missing for a station then that would be a data coverage of 0.9. We see that Sea-Tac International Airport has perfect data coverage, so perhaps we could just choose that one and move on.
 
-Not so fast my friend. Sea-Tac is a bit higher in elevation, and there are closer weather stations. To hopefully make the weather station selection more informed, we can compare the temperatures for the weather stations directly.
+Not so fast my friend. Sea-Tac is a bit higher in elevation, and there are closer weather stations. To hopefully make the weather station selection more informed, we can compare the temperatures for the weather stations directly. Suppose that our analysis will proceed for the year 2014.
 
 
 ```{r, fig.width=11,fig.height=8}
@@ -74,7 +74,7 @@ summary(comp)
 
 The function stationCompare takes a dataset of stations (as returned by the stationSearch function), a date range, and returns an object of S3 class stationComp. The return value is actually just a list with entries for 1) ghcn data and 2) the associated station info, but defining the class lets us use the summary and plot methods, which hopefully makes it easier to remember how all this works. It's a bit slow to run as it's querying the v2 NOAA Web Services, and those are a bit slow.
 
-The summary variable "dataFrac"" refers to the data coverage over the specified interval. The "datacoverage"" reported by stationSearch is from the NOAA documentation and refers to overall data coverage, which may not necessarily be relevant to the time frame of your building. To find weather to pair with the Ecotope bills, we're more concerned with data coverage over the past few years than data coverage in 1965. 
+The summary variable "dataFrac"" refers to the data coverage over the specified interval. The "datacoverage"" reported by stationSearch is from the NOAA documentation and refers to overall data coverage, which may not necessarily be relevant to the time frame of your building. To find weather to pair with the Ecotope bills, we're more concerned recent data coverage than data coverage in say 1965. 
 
 The field "relativeTemp"" summarizes the average degrees F for that weather station relative to the mean of all 5 weather stations. It stands out that Boeing Field read on average 1.3 degrees warmer than the average temperature of the 5 sites in question.
 
@@ -82,7 +82,7 @@ The summary method takes a stab at which stations are preferable and sorts accor
 
 ### Visualizing the Different Weather Stations
 
-We can also plot the comparison. The default is to plot a 2-week rolling average temperature, scaled by the mean temperature across the sites in question. What really jumps out here is that the Kent station is missing quite a bit of data, and the Boeing Field station is quite a bit warmer than the others. We also saw that numerically with the summary, but pictures are quite helpful.
+We can also plot the comparison. The default is to plot a 2-week rolling average temperature, scaled by the mean temperature across the sites in question. What really jumps out here is that the Kent station is missing quite a bit of data, and the Boeing Field station is quite a bit warmer than the others. We also saw that numerically with the summary, but the graphics are quite helpful.
 
 
 ```{r, fig.width=11, fig.height=8}
@@ -102,10 +102,9 @@ Specifying type = "actual" will show the actual temperatures rather than scaled 
 plot(comp, type = "actual")
 ```
 
-We can change the number of days for the rolling mean with the "days" argument.
+We can increase the smoothing with the "days" argument to set a wider rolling mean.
 
 ```{r, fig.width=11, fig.height=8}
-plot(comp, days = 2)
 plot(comp, days = 60)
 ```
 
@@ -113,7 +112,6 @@ We can also change the variable. Our choices are "aveTemp", "tmin", or "tmax". T
 
 ```{r, fig.width=11, fig.height=8}
 plot(comp, var = "tmin")
-plot(comp, var = "tmax")
 ```
 
 Mostly what we're getting out of this is that Boeing Field is uniformly 2 or so degrees warmer than the other stations. This may be due Boeing Field being a bit more isolated from the large bodies of water, along the Duwamish waterway between Lake Washington and Puget Sound. Sand Point and Renton are on the lake, and Sea-Tac is fairly close to the Sound. I'm just spitballing here, though. Regardless, the Ecotope office, close to the University of Washington and Lake Washington, probably shouldn't get matched with the Boeing Field weather. The Sand Point station seems most appropriate.
@@ -185,3 +183,38 @@ read.noaa("data", paste("datasetid=GHCND",
 ```
 
 Hopefully that's enough to get you started!
+
+## Recap
+
+That was all a lot of exploration for what should be a fairly simple task. Let's recap.
+
+1. Request a token from NOAA https://www.ncdc.noaa.gov/cdo-web/token, and put the following line in your .Rprofile (or load it interactively).
+
+```{r}
+noaa_key <- "your_key_here"
+```
+
+2. Search for relevant stations with stationSearch
+
+```{r}
+stations <- stationSearch("Seattle")
+stations
+```
+
+3. Choose the most appropriate station with stationCompare
+
+```{r}
+comp <- stationCompare(stations, "2014-01-01", "2014-06-01")
+summary(comp)
+```
+
+4. Read the weather data with read.ghcn
+
+```{r}
+read.ghcn("GHCND:USW00094290", "2014-07-01", "2014-07-10")
+```
+
+
+```{r, echo=FALSE}
+rm(noaa_key)
+```

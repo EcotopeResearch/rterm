@@ -25,6 +25,8 @@
 #'  "locations", "stations", "data"
 #' @param param extra parameters for the search
 #' 
+#' @seealso \code{\link{read.ghcn}}
+#' 
 #' @examples
 #' # Show available datasets
 #' read.noaa("datasets")
@@ -145,7 +147,9 @@ read.one.ghcn <- function(stationid, startdate, enddate) {
 #' 
 #' @param stationid the identifier for the weather station
 #' @param startdate the first date of data requested
-#' @param enddate the last date of data requested
+#' @param enddate the last date of data requested. Dates should 
+#'  be POSIX date class or coercible to such with as.Date
+#' 
 #' 
 #' @return a data frame with variables "date", "TMIN", "TMAX", and 
 #'   "aveTemp". Temperatures in Fahrenheit
@@ -256,7 +260,12 @@ stationSearch <- function(name = NULL, lat = NULL, lon = NULL, nClosest = 5) {
 }
 
 smoothTemps <- function(dset, days = 14, var = "aveTemp") {
-  # Take a 2 week rolling mean for presentation
+  # Make sure we have enough records to smooth
+  if(days >= min(table(dset$id))) {
+    days <- 1
+  }
+  
+  # Take a rolling mean for presentation
   fsmooth <- rep(1 / days, days)
   dset <- do.call('rbind', by(dset, dset$id, function(x) {
     x$maTemp <- filter(x[var], fsmooth, sides = 1)
@@ -273,6 +282,35 @@ smoothTemps <- function(dset, days = 14, var = "aveTemp") {
   dset
 }
 
+
+#' Compare GHCN Weather Stations
+#' 
+#' Compare weather stations returned by \code{\link{stationSearch}}
+#' 
+#' 
+#' 
+#' @param st Data frame of stations returned by \code{\link{stationSearch}}
+#' @param startdate the start date of the interval to compare
+#' @param enddate the end date of the interval to compare
+#' 
+#' The start and end date arguments should either be POSIX date objects, 
+#' or coercible to with as.Date. So for example "2013-01-01" is appropriate.
+#' 
+#' @return An object of S3 class stationComp. This is a list with two entries
+#' 1) data - the weather data for the requested stations over the requested interval 
+#' and 2) stations - the station info data frame.
+#'   
+#' @seealso \code{\link{summary.stationComp}} \code{\link{plot.stationComp}} 
+#'  \code{\link{read.ghcn}}
+#' 
+#' @examples
+#' # Compare 5 closest weather stations to Ecotope's Seattle office
+#' stations <- stationSearch(lat = 47.6569326, lon = -122.3184546)
+#' comp <- stationCompare(stations, "2014-01-01", "2014-12-31")
+#' summary(comp)
+#' plot(comp)
+#' 
+#' 
 stationCompare <- function(st, startdate, enddate) {
   ids <- stations$id
   dsets <- lapply(1:nrow(st), function(i) {
@@ -289,12 +327,41 @@ stationCompare <- function(st, startdate, enddate) {
   stationComp
 }
 
+
+#' Summarize a comparison of GHCN weather stations
+#' 
+#' Summarize a comparison of weather stations returned by 
+#' \code{\link{stationCompare}}
+#' 
+#' 
+#' @param sc stationComp object as returned by \code{\link{stationCompare}}
+#' 
+#' 
+#' @return a data frame summarizing the weather stations. This includes 
+#'  the station name and id, as well as some summary stats to hopefully 
+#'  help you choose. "dataFrac" refers to the fraction of non-missing data 
+#'  in the observed interval ("datacoverage" from stationSearch refers to 
+#'  the entire history of the weather station). "relativeTemp" refers to 
+#'  the average temperature of that station, with respect to the average 
+#'  temperature of all stations in the comparison. If you searched by 
+#'  latitude/longitude, you also get "milesDistant", which is miles from your 
+#'  search coordinates to the weather station.
+#'   
+#' @seealso \code{\link{stationSearch}} \code{\link{stationComp}} 
+#'  \code{\link{plot.stationComp}}  \code{\link{read.ghcn}}
+#' 
+#' @examples
+#' # Compare 5 closest weather stations to Ecotope's Seattle office
+#' stations <- stationSearch(lat = 47.6569326, lon = -122.3184546)
+#' comp <- stationCompare(stations, "2014-01-01", "2014-12-31")
+#' summary(comp)
+#' 
+#' 
 summary.stationComp <- function(sc) {
   # We want to report the following...
   #  1) Observed Data Fraction
   #  2) Degrees above or below average between selected stations
   
-
   dset <- smoothTemps(sc$data)
   
   sumStats <- do.call('rbind', by(dset, dset$id, function(x) {
@@ -306,18 +373,56 @@ summary.stationComp <- function(sc) {
   
   results <- merge(sc$stations, sumStats)
   
-  results <- results %>%
-    dplyr::mutate(relTempScaled = 1 - abs(relativeTemp) / sum(abs(relativeTemp))) %>%
-    dplyr::mutate(distInd = 1 - milesDistant / sum(milesDistant)) %>%
-    dplyr::mutate(useIndex = (dataFrac + relTempScaled + distInd) / 3)
+  results <- dplyr::mutate(results, 
+                           relTempScaled = 1 - abs(relativeTemp) / sum(abs(relativeTemp)))
+  
+  if(is.null(stations$milesDistant)) {
+    results <- results %>%
+      dplyr::mutate(useIndex = (dataFrac + relTempScaled) / 2)
+  } else {
+    results <- results %>%
+      dplyr::mutate(distInd = 1 - milesDistant / sum(milesDistant)) %>%
+      dplyr::mutate(useIndex = (dataFrac + relTempScaled + distInd) / 3)
+  }
 
   results <- plyr::arrange(results, -useIndex)
-  results <- dplyr::select(results, id, name, milesDistant, dataFrac, relativeTemp)
+  results <- results[, names(results) %in% c("id", "name", "milesDistant", "dataFrac", "relativeTemp")]
   results
 }
 
 
-
+#' Plot a comparison of GHCN weather stations
+#' 
+#' Plot a comparison of weather stations returned by 
+#' \code{\link{stationCompare}}
+#' 
+#' 
+#' @param sc stationComp object as returned by \code{\link{stationCompare}}
+#' @param days The number of days for the rolling average. Optional, 
+#'   defaults to 14.
+#' @param var The variable to plot. Optional, defaults to "aveTemp". Can 
+#'   also be "tmin" or "tmax". See \code{\link{read.ghcn}}
+#' @param type The type of view, can be "actual" or "relative". "actual" 
+#'   will plot the recorded temperatures, while "relative" will plot the 
+#'   temperatures with reference to the mean temperature. "relative" tends 
+#'   to be more useful in visualizing the differences between stations. 
+#'   This argument is optional and defaults to "relative".
+#' 
+#' 
+#' @return a ggplot object of the graphic
+#'   
+#' @seealso \code{\link{stationSearch}} \code{\link{stationComp}} 
+#'  \code{\link{plot.stationComp}}  \code{\link{read.ghcn}}
+#' 
+#' @examples
+#' # Compare 5 closest weather stations to Ecotope's Seattle office
+#' stations <- stationSearch("Seattle")
+#' comp <- stationCompare(stations, "2014-01-01", "2014-12-31")
+#' plot(comp)
+#' plot(comp, "days" = 60)
+#' plot(comp, var = "tmin", type = "actual")
+#' 
+#' 
 plot.stationComp <- function(sc, days = 14, var = "aveTemp", type = "relative") {
   
   dset <- smoothTemps(sc$data, days, var)
@@ -338,16 +443,16 @@ plot.stationComp <- function(sc, days = 14, var = "aveTemp", type = "relative") 
     p <- ggplot2::ggplot(dset) + ggplot2::theme_bw() +
       ggplot2::geom_line(ggplot2::aes(x = date, y = maTemp, col = name)) +
       ggplot2::ggtitle(title1) +
-      ggplot2::xlab("") + ggplot2::ylab(paste(title1, "F")) +
-      ggplot2::theme(legend.text = ggplot2::element_text(size = 7))
+      ggplot2::xlab("") + ggplot2::ylab(paste(title1, "F")) #+
+      #ggplot2::theme(legend.text = ggplot2::element_text(size = 7))
     
   } else if(type == "relative") {
     p <- ggplot2::ggplot(dset) + ggplot2::theme_bw() + 
       ggplot2::geom_line(ggplot2::aes(x = date, y = scaledTemp, col = name)) + 
       ggplot2::ggtitle(paste(title1, "\nRelative to Mean Temp by Date")) +
       ggplot2::xlab("") +
-      ggplot2::ylab(paste(title1, "(F)\nrelative to mean for that date")) +
-      ggplot2::theme(legend.text = ggplot2::element_text(size = 7))    
+      ggplot2::ylab(paste(title1, "(F)\nrelative to mean for that date"))# +
+      #ggplot2::theme(legend.text = ggplot2::element_text(size = 7))    
   }
 
   p
