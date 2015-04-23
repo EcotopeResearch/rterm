@@ -373,7 +373,7 @@ summary.stationComp <- function(sc) {
   results <- dplyr::mutate(results, 
                            relTempScaled = 1 - abs(relativeTemp) / sum(abs(relativeTemp)))
 
-  if(is.null(stations$milesDistant)) {
+  if(is.null(sc$stations$milesDistant)) {
     results <- results %>%
       dplyr::mutate(useIndex = (dataFrac + relTempScaled) / 2)
   } else {
