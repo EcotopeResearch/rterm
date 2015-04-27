@@ -11,7 +11,8 @@ read.ghcn(stationid, startdate, enddate)
 
 \item{startdate}{the first date of data requested}
 
-\item{enddate}{the last date of data requested}
+\item{enddate}{the last date of data requested. Dates should
+ be POSIX date class or coercible to such with as.Date}
 }
 \value{
 a data frame with variables "date", "TMIN", "TMAX", and

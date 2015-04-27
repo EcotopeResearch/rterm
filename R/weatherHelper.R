@@ -224,6 +224,8 @@ calcDistance <- function(lat1, lon1, lat2, lon2) {
 #' @param nClosest The number of stations to return when searching 
 #'  on latitude & longitude. Example: nClosest = 10 will show the 
 #'  10 closest stations. Optional, defaults to 5.
+#' @param country an optional specification of country
+#' @param state an optional specification of us state
 #' 
 #' @return a data frame with information about the relevant stations found. 
 #'  In the case that you specified lat/lon instead of a name this will 
@@ -240,23 +242,49 @@ calcDistance <- function(lat1, lon1, lat2, lon2) {
 #' # specifying a location in the Columbia Basin
 #' stationSearch(lat = 46.943, lon = -119.240)
 #' 
+#' # It can help to specify state for a common name
+#' stationSearch("Madison")
+#' stationSearch("Madison", state = "wisconsin")
 #' 
-stationSearch <- function(name = NULL, lat = NULL, lon = NULL, nClosest = 5) {
+#' # Do we have weather sites in Switzerland?
+#' stationSearch(country = "Switzerland")
+#' 
+#' 
+stationSearch <- function(name = NULL, lat = NULL, lon = NULL, nClosest = 5, country = NULL, state = NULL) {
+  # Check for a country and/or state
+  if(!is.null(country)) {
+    stations <- stations[grep(country, stations$country, ignore.case = TRUE), ]
+  }
+  if(!is.null(state)) {
+    stations <- stations[grep(state, stations$state, ignore.case = TRUE), ]
+  }
+  
+  if(!nrow(stations)) {
+    print("No stations found")
+    return(stations)
+  }
+  
+  stations$milesDistant <- NA
+  
+  # Now search by either name or lat/lon
   if(!is.null(name)) {
     ind <- grep(name, stations$name, ignore.case = TRUE)
-    if(length(ind)) {
-      return(stations[ind, ])
+    if(!length(ind)) {
+      return(NULL)
     }
   } else if(!is.null(lat) & !is.null(lon)) {
     stations$milesDistant <- sapply(1:nrow(stations), function(i) {
       calcDistance(stations$latitude[i], stations$longitude[i], lat, lon)
     })
     stations <- plyr::arrange(stations, milesDistant)
-    return(stations[1:nClosest, ])
+    ind <- seq(from = 1, to = min(nrow(stations), nClosest), by = 1)
   } else {
-    stop("Must specify either a name to search on, or latitude/longitude coordinates. See help(stationSearch)")
+    ind <- 1:nrow(stations)
   }
 
+  stations <- subset(stations, select = -c(country, state))
+  
+  stations[ind, ]
 }
 
 smoothTemps <- function(dset, days = 14, var = "aveTemp") {
@@ -268,7 +296,7 @@ smoothTemps <- function(dset, days = 14, var = "aveTemp") {
   # Take a rolling mean for presentation
   fsmooth <- rep(1 / days, days)
   dset <- do.call('rbind', by(dset, dset$id, function(x) {
-    x$maTemp <- filter(x[var], fsmooth, sides = 1)
+    x$maTemp <- filter(x[var], fsmooth, sides = 2)
     x
   }))
   
@@ -404,6 +432,9 @@ summary.stationComp <- function(sc) {
 #'   temperatures with reference to the mean temperature. "relative" tends 
 #'   to be more useful in visualizing the differences between stations. 
 #'   This argument is optional and defaults to "relative".
+#' @param xvar What variable to plot against. Defaults to "date" but can 
+#'   also be "doy" - day of year. "date" gives a long rolling line, while 
+#'   "doy" gives multiple lines on top of each other per station.
 #' 
 #' 
 #' @return a ggplot object of the graphic
@@ -420,7 +451,7 @@ summary.stationComp <- function(sc) {
 #' plot(comp, var = "tmin", type = "actual")
 #' 
 #' 
-plot.stationComp <- function(sc, days = 14, var = "aveTemp", type = "relative") {
+plot.stationComp <- function(sc, days = 14, var = "aveTemp", type = "relative", xvar = "date") {
   
   dset <- smoothTemps(sc$data, days, var)
   
@@ -436,22 +467,101 @@ plot.stationComp <- function(sc, days = 14, var = "aveTemp", type = "relative") 
   
   title1 <- paste(days, "day Rolling", varLong)
   
+  if(xvar == "doy") {
+    dset$dofm <- format(dset$date, "%d")
+    dset$m <- format(dset$date, "%m")
+    dset$doy <- as.Date(paste("2000", dset$m, dset$dofm, sep = "-"))
+    dset$year <- as.numeric(format(dset$date, format = "%Y"))
+    dset$groupvar <- interaction(dset$name, dset$year)
+  }
+  
   if(type == "actual") {
-    p <- ggplot2::ggplot(dset) + ggplot2::theme_bw() +
-      ggplot2::geom_line(ggplot2::aes(x = date, y = maTemp, col = name)) +
-      ggplot2::ggtitle(title1) +
-      ggplot2::xlab("") + ggplot2::ylab(paste(title1, "F")) #+
-      #ggplot2::theme(legend.text = ggplot2::element_text(size = 7))
-    
+    yvar = "maTemp"
   } else if(type == "relative") {
-    p <- ggplot2::ggplot(dset) + ggplot2::theme_bw() + 
-      ggplot2::geom_line(ggplot2::aes(x = date, y = scaledTemp, col = name)) + 
-      ggplot2::ggtitle(paste(title1, "\nRelative to Mean Temp by Date")) +
-      ggplot2::xlab("") +
-      ggplot2::ylab(paste(title1, "(F)\nrelative to mean for that date"))# +
-      #ggplot2::theme(legend.text = ggplot2::element_text(size = 7))    
+    yvar = "scaledTemp"
+  }
+  
+  p <- ggplot2::ggplot(dset) + ggplot2::theme_bw() +
+    ggplot2::ggtitle(title1) +
+    ggplot2::xlab("") + ggplot2::ylab(paste(title1, "F"))  
+  
+  if(xvar == "doy") {
+    p <- p + ggplot2::geom_line(ggplot2::aes_string(x = xvar, y = yvar, col = "name", group = "groupvar", size = "year"), alpha = .8) +
+      scale_x_date(breaks = "2 months", labels = scales::date_format("%B")) + 
+      scale_size_continuous(range = c(.2, 1.5))
+  } else {
+    p <- p + ggplot2::geom_line(ggplot2::aes_string(x = xvar, y = yvar, col = "name"))
   }
 
   p
 }
+
+
+
+# Bonus function to compare weather at a given site for x years...
+#' Look at a time trend within a station, for example the past 5 years
+#' 
+#' Plot a comparison of weather stations returned by 
+#' \code{\link{stationCompare}}
+#' 
+#' 
+#' @param weather a weather dataset returned by read.ghcn
+#' @param var The variable to plot. Optional, defaults to "aveTemp". Can 
+#'   also be "tmin" or "tmax". See \code{\link{read.ghcn}}
+#' @param days The number of days for the rolling average. Optional, 
+#'   defaults to 14.
+#' @param type The type of view, can be "actual" or "relative". "actual" 
+#'   will plot the recorded temperatures, while "relative" will plot the 
+#'   temperatures with reference to the mean temperature. "relative" tends 
+#'   to be more useful in visualizing the differences between stations. 
+#'   This argument is optional and defaults to "relative".
+#' 
+#' @return a list containing "data" the dataset w/ additional smoothed 
+#'  variable(s) and "plot", the ggplot object
+#'   
+#' @seealso \code{\link{stationSearch}} \code{\link{stationComp}} 
+#'  \code{\link{plot.stationComp}}  \code{\link{read.ghcn}}
+#' 
+#' @examples
+#' # Look at the last 5 years from Ted Stevens Intl Airport in Alaska
+#' anc <- read.ghcn("GHCND:USW00026451", "2010-01-01", "2015-04-15")
+#' ancTrend <- stationTrend(anc)
+#' ancTrend$plot
+#' 
+#' 
+stationTrend <- function(weather, var = "aveTemp", days = 60, type = "relative") {
+  
+  weather$year <- as.numeric(format(weather$date, format = "%Y"))
+  weather$day <- as.numeric(format(weather$date, format = "%j"))
+  
+  # Add a relative temperature variable
+  weather <- do.call("rbind", by(weather, weather$day, function(x) {
+    x$relTemp <- scale(x[var], center = TRUE, scale = FALSE)
+    x
+  }))
+  weather <- arrange(weather, date)
+
+  fsmooth <- rep(1 / days, days)
+  weather$maTemp <- filter(weather$relTemp, fsmooth, sides = 2)
+  weather$actualSmoothed <- filter(weather[var], fsmooth, sides = 2)
+  weather$dofm <- format(weather$date, "%d")
+  weather$m <- format(weather$date, "%m")
+  weather$dateDummy <- as.Date(paste("2000", weather$m, weather$dofm, sep = "-"))
+  # p <- ggplot(weather[!is.na(weather$maTemp), ]) + theme_bw() + 
+  p <- ggplot(weather) + theme_bw() + 
+    scale_x_date(breaks = "2 months", labels = scales::date_format("%B")) + 
+    ggtitle(paste("Smoothed Relative", var)) +
+    xlab("") + ylab(paste("Smoothed Relative", var, "(F)")) +
+    scale_colour_discrete(name = "Year")
+  
+  if(type == "relative") {
+    p <- p + geom_line(aes(x = dateDummy, y = maTemp, col = factor(year)))
+  } else if(type == "actual") {
+    p <- p + geom_line(aes(x = dateDummy, y = actualSmoothed, col = factor(year)))   
+  }
+  
+  list("data" = weather, "plot" = p)
+}
+
+
 

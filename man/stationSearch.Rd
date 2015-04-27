@@ -4,7 +4,8 @@
 \alias{stationSearch}
 \title{Search for GHCN Weather Stations}
 \usage{
-stationSearch(name = NULL, lat = NULL, lon = NULL, nClosest = 5)
+stationSearch(name = NULL, lat = NULL, lon = NULL, nClosest = 5,
+  country = NULL, state = NULL)
 }
 \arguments{
 \item{name}{A name to search for in the list of station names.
@@ -15,8 +16,12 @@ Evaluated as a regular expression.}
 \item{lon}{Longitude}
 
 \item{nClosest}{The number of stations to return when searching
- on latitude & longitude. Example: nClosest = 10 will show the
- 10 closest stations. Optional, defaults to 5.}
+on latitude & longitude. Example: nClosest = 10 will show the
+10 closest stations. Optional, defaults to 5.}
+
+\item{country}{an optional specification of country}
+
+\item{state}{an optional specification of us state}
 }
 \value{
 a data frame with information about the relevant stations found.
@@ -34,6 +39,13 @@ stationSearch("Bend, OR")
 # Find the closest weather stations to a lat/lon pair
 # specifying a location in the Columbia Basin
 stationSearch(lat = 46.943, lon = -119.240)
+
+# It can help to specify state for a common name
+stationSearch("Madison")
+stationSearch("Madison", state = "wisconsin")
+
+# Do we have weather sites in Switzerland?
+stationSearch(country = "Switzerland")
 }
 \seealso{
 \code{\link{read.ghcn}} \code{\link{stationCompare}}

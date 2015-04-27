@@ -50,4 +50,7 @@ tmp <- read.noaa("stations", paste("locationid=FIPS:53",
                                     "startdate=2010-01-01",
                                     "limit=1000", sep = "&"))
 }
+\seealso{
+\code{\link{read.ghcn}}
+}
 

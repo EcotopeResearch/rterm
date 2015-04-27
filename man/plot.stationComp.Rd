@@ -5,7 +5,7 @@
 \title{Plot a comparison of GHCN weather stations}
 \usage{
 \method{plot}{stationComp}(sc, days = 14, var = "aveTemp",
-  type = "relative")
+  type = "relative", xvar = "date")
 }
 \arguments{
 \item{sc}{stationComp object as returned by \code{\link{stationCompare}}}
@@ -17,10 +17,14 @@ defaults to 14.}
 also be "tmin" or "tmax". See \code{\link{read.ghcn}}}
 
 \item{type}{The type of view, can be "actual" or "relative". "actual"
-  will plot the recorded temperatures, while "relative" will plot the
-  temperatures with reference to the mean temperature. "relative" tends
-  to be more useful in visualizing the differences between stations.
-  This argument is optional and defaults to "relative".}
+will plot the recorded temperatures, while "relative" will plot the
+temperatures with reference to the mean temperature. "relative" tends
+to be more useful in visualizing the differences between stations.
+This argument is optional and defaults to "relative".}
+
+\item{xvar}{What variable to plot against. Defaults to "date" but can
+  also be "doy" - day of year. "date" gives a long rolling line, while
+  "doy" gives multiple lines on top of each other per station.}
 }
 \value{
 a ggplot object of the graphic
