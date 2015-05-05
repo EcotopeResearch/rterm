@@ -58,7 +58,7 @@ stations <- merge(stations, states, all.x = TRUE)
 dim(stations)
 
 # Clean up
-stations <- arrange(stations, id)
+stations <- plyr::arrange(stations, id)
 stations$stateCode <- NULL
 stations$countryCode <- NULL
 

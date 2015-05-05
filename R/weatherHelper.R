@@ -183,13 +183,15 @@ read.ghcn <- function(stationid, startdate, enddate) {
   if(is.null(dset)) return(NULL)
   
   # Fill in NA values...
-  allDates <- seq(from = min(dset$date), to = max(dset$date), by = 1)
+  allDates <- seq(from = stDate, to = edDate, by = 1)
   isMissing <- setdiff(allDates, dset$date)
   if(length(isMissing)) {
     isMissing <- as.Date(isMissing, origin = "1970-01-01")
     dset <- rbind(dset,
                   data.frame("date" = isMissing, "tmin" = NA, "tmax" = NA, "aveTemp" = NA))
   }
+  
+  dset <- plyr::arrange(dset, date)
   
   return(dset)
 }
