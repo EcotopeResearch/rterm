@@ -10,10 +10,6 @@ Spring 2015
 SEXP linkWeatherToData(SEXP dateStart, SEXP dateEnd, SEXP date);
 
 // Make change point variables for regression
-SEXP changePointVar(SEXP temp, SEXP rows, SEXP base);
-int changePointVarC(double *temp, double base, double *newvar, int *rows, int heatcool, int ndata, int nweather);
-
-// Make degree day variables for regression
-SEXP degreeDayVar(SEXP temp, SEXP rows, SEXP base);
-int degreeDayVarC(double *temp, double base, double *newvar, int *rows, int heatcool, int ndata, int nweather);
+SEXP deriveVar(SEXP temp, SEXP rows, SEXP base, SEXP ndata, SEXP heatcool, SEXP type);
+int deriveVarC(double *temp, double base, double *newvar, int *rows, int heatcool, int ndata, int nweather, int type);
 

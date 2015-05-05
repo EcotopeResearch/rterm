@@ -59,6 +59,9 @@ addData <- function(term, data, formula = NULL, energyVar = NULL, dateStartVar =
         dateVar <- which(varClasses[-1] == "Date")
         daysVar <- which(varClasses[-1] == "numeric")
         
+        names(term$data)[-1][dateVar] <- "dateEnd"
+        names(term$data)[-1][daysVar] <- "days"
+        
         
       } else {
         stop("Couldn't recognize date/time variables")
@@ -123,6 +126,7 @@ addData <- function(term, data, formula = NULL, energyVar = NULL, dateStartVar =
 
 addWeather <- function(term, stationid = NULL, weather = NULL, timeVar = NULL, tempVar = NULL, name = NULL) {
   
+  ind <- length(term$weather)
   # Check to see if this weather needs a name
   if(is.null(name)) {
     name <- paste0("weather", ind)
@@ -147,8 +151,15 @@ addWeather <- function(term, stationid = NULL, weather = NULL, timeVar = NULL, t
     if(!is.null(weather$date) & !is.null(weather$aveTemp)) {
       term$weather[[name]] <- weather  
     } else if(!is.null(timeVar) & !is.null(tempVar)) {
-      term$weather[[name]] <- data.frame("date" = weather[timeVar],
-                            "aveTemp" = weather[tempVar])
+      term$weather[[name]] <- data.frame("aveTemp" = weather[, tempVar])
+      if(inherits(weather[, timeVar], "POSIXt")) {
+        term$weather[[name]]$time <- weather[, timeVar]
+        term$weather[[name]]$date <- as.Date(weather[, timeVar])
+      } else if(inherits(weather[, timeVar], "Date")) {
+        term$weather[[name]]$date <- weather[, timeVar]
+      } else {
+        stop("Weather data time variable should be either Date class or POSIX time class")
+      }
     } else {
       stop(paste("When providing your own weather, must specify timeVar and tempVar",
            "See help(addWeather)"))
@@ -177,6 +188,7 @@ addWeather <- function(term, stationid = NULL, weather = NULL, timeVar = NULL, t
     term$weather$sin1 <- NULL
     term$weather$sin2 <- NULL
   }
+
   
   term
 }

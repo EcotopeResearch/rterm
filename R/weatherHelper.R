@@ -298,7 +298,7 @@ smoothTemps <- function(dset, days = 14, var = "aveTemp") {
   # Take a rolling mean for presentation
   fsmooth <- rep(1 / days, days)
   dset <- do.call('rbind', by(dset, dset$id, function(x) {
-    x$maTemp <- filter(x[var], fsmooth, sides = 2)
+    x$maTemp <- stats::filter(x[var], fsmooth, sides = 2)
     x
   }))
   
@@ -544,8 +544,8 @@ stationTrend <- function(weather, var = "aveTemp", days = 60, type = "relative")
   weather <- arrange(weather, date)
 
   fsmooth <- rep(1 / days, days)
-  weather$maTemp <- filter(weather$relTemp, fsmooth, sides = 2)
-  weather$actualSmoothed <- filter(weather[var], fsmooth, sides = 2)
+  weather$maTemp <- stats::filter(weather$relTemp, fsmooth, sides = 2)
+  weather$actualSmoothed <- stats::filter(weather[var], fsmooth, sides = 2)
   weather$dofm <- format(weather$date, "%d")
   weather$m <- format(weather$date, "%m")
   weather$dateDummy <- as.Date(paste("2000", weather$m, weather$dofm, sep = "-"))

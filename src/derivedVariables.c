@@ -47,6 +47,97 @@ SEXP linkWeatherToData(SEXP dateStart, SEXP dateEnd, SEXP date) {
   return ans;
 }
 
+// type == 1 is change point, else degree day
+SEXP deriveVar(SEXP temp, SEXP rows, SEXP base, SEXP ndata, SEXP heatcool, SEXP type) {
+  
+  int nt = length(temp);
+  int *nd = INTEGER(ndata);
+  
+  SEXP results = PROTECT(allocVector(REALSXP, *nd));
+  double *newvar = REAL(results);
+  double *tempC = REAL(temp);
+  double *baseC = REAL(base);
+  int *rowsC = INTEGER(rows);
+  int *heatcoolC = INTEGER(heatcool);
+  int *typeC = INTEGER(type);
+
+  // Make sure that our newvar is populated by 0
+  for(int i = 0; i < *nd; i++) {
+    newvar[i] = 0;
+  }
+
+  deriveVarC(tempC, *baseC, newvar, rowsC, *heatcoolC, *nd, nt, *typeC);
+
+  UNPROTECT(1);
+  return results;
+}
+
+
+// heatcool 1 for heating, 2 for cooling
+int deriveVarC(double *temp, double base, double *newvar, int *rows, int heatcool, int ndata, int nweather, int type) {
+  
+  int tmpRow;
+  double tmpVal;
+  
+  // For each row of the data, count how many weather observations correspond
+  double *ns = malloc(ndata * sizeof(double));
+  for(int i = 0; i < ndata; i++) {
+    ns[i] = 0;
+  }
+  for(int j = 0; j < nweather; j++) {
+    ns[rows[j] - 1]++;
+  }
+  
+  // With change point, average first, then do transformation
+  if(type == 1) {
+    for(int i = 0; i < nweather; i++) {
+      tmpRow = rows[i] - 1;
+      // fprintf(stderr, "datarow = %d\n", tmpRow);
+      newvar[tmpRow] += temp[i] / ns[tmpRow];
+    }    
+      // Transformation
+    for(int i = 0; i < ndata; i++) {
+      if(heatcool == 1) {
+        newvar[i] = base - newvar[i];
+      } else {
+        newvar[i] = newvar[i] - base;
+      }
+      if(newvar[i] < 0) newvar[i] = 0;
+    }
+  } else {
+    // With degree day we transform & then sum
+    for(int i = 0; i < nweather; i++) {
+      tmpRow = rows[i] - 1;
+      if(heatcool == 1) {
+        tmpVal = base - temp[i];
+      } else {
+        tmpVal = temp[i] - base;
+      }
+      if(tmpVal < 0) tmpVal = 0;
+      
+      newvar[tmpRow] += tmpVal;
+    }
+    
+  }
+  
+  
+  free(ns);
+  return 0;
+}
+
+
+SEXP degreeDayVar(SEXP temp, SEXP rows, SEXP base, SEXP ndata, SEXP heatcool) {
+  
+  SEXP results = PROTECT(allocVector(REALSXP, 10));
+  
+  return results;
+}
+
+int degreeDayVarC(double *temp, double base, double *newvar, int *rows, int heatcool, int ndata, int nweather) {
+  
+  
+  return 0;
+}
 
 
 
