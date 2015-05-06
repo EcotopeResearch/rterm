@@ -88,6 +88,11 @@ int deriveVarC(double *temp, double base, double *newvar, int *rows, int heatcoo
     ns[rows[j] - 1]++;
   }
   
+  // Zero out the new variable, to be safe
+  for(int i = 0; i < ndata; i++) {
+    newvar[i] = 0.0;
+  }
+  
   // With change point, average first, then do transformation
   if(type == 1) {
     for(int i = 0; i < nweather; i++) {

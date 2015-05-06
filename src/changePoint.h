@@ -8,12 +8,12 @@ Spring 2015
 
 //At a basic level we need to fit a LM in C (+ an R interface to make sure it works)
 //SEXP lmFast(SEXP X, SEXP y, SEXP w);
-int lmFastC(double *X, double *y, double *w, int n, int p, double *betahat);
+//int lmFastC(double *X, double *y, double *w, int n, int p, double *betahat);
 
 //Functions to help with that
-int multXTy(char *trans, double *X, int nrowX, int ncolX, double *y, double *z);
-int multXTX(double *X, int nrowX, int ncolX, double *Y);
-int solveLinearSystem(double *A, double *b, int n);
+//int multXTy(char *trans, double *X, int nrowX, int ncolX, double *y, double *z);
+//int multXTX(double *X, int nrowX, int ncolX, double *Y);
+//int solveLinearSystem(double *A, double *b, int n);
 
 //Application #1) Find the optimal change point by sum of squared resids
 SEXP findChangePoint(SEXP X, SEXP y, SEXP weights, SEXP heating, SEXP cooling);

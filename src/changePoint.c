@@ -41,7 +41,7 @@ int makeChangePointVar(double *x, int n, double T, double *cpVar, int heatcool) 
   return 0;
 }
 
-
+/*
 //Function to calculate the sum of squared errors for a regression fit
 double ssError(double *X, double *y, int n, int p, double *betahat) {
   double ss = 0;
@@ -61,10 +61,10 @@ double ssError(double *X, double *y, int n, int p, double *betahat) {
   
   return ss;
 }
+*/
 
 
-
-
+/*
 //lmFast Function to return coefs of a linear regression w/ weights
 int lmFastC(double *X, double *y, double *w, int n, int p, double *betahat) {
   
@@ -104,8 +104,9 @@ int lmFastC(double *X, double *y, double *w, int n, int p, double *betahat) {
 
   return 0;
 }
+*/
 
-
+/*
 //lmFast Function that plugs into R... I might not need this to plug into R
 SEXP lmFast(SEXP X, SEXP y, SEXP weights) {
   //Grab the dimensions
@@ -134,7 +135,9 @@ SEXP lmFast(SEXP X, SEXP y, SEXP weights) {
   UNPROTECT(1);
   return ans;
 }
+*/
 
+/*
 //Multiply a matrix X' %*% y
 int multXTy(char *trans, double *X, int nrowX, int ncolX, double *y, double *z) {
   int incx = 1;
@@ -172,7 +175,7 @@ int solveLinearSystem(double *A, double *b, int n) {
   free(IPIV);
   return 0;
 }
-
+*/
 
 
 

@@ -469,6 +469,12 @@ plot.stationComp <- function(sc, days = 14, var = "aveTemp", type = "relative", 
   
   title1 <- paste(days, "day Rolling", varLong)
   
+  if(type == "relative") {
+    title2 <- paste(title1, "\nRelative to Mean Across Selected Weather Stations", sep = "")
+  } else {
+    title2 <- title1
+  }
+  
   if(xvar == "doy") {
     dset$dofm <- format(dset$date, "%d")
     dset$m <- format(dset$date, "%m")
@@ -484,8 +490,8 @@ plot.stationComp <- function(sc, days = 14, var = "aveTemp", type = "relative", 
   }
   
   p <- ggplot2::ggplot(dset) + ggplot2::theme_bw() +
-    ggplot2::ggtitle(title1) +
-    ggplot2::xlab("") + ggplot2::ylab(paste(title1, "F"))  
+    ggplot2::ggtitle(title2) +
+    ggplot2::xlab("") + ggplot2::ylab(paste(title1, "(F)"))  
   
   if(xvar == "doy") {
     p <- p + ggplot2::geom_line(ggplot2::aes_string(x = xvar, y = yvar, col = "name", group = "groupvar", size = "year"), alpha = .8) +

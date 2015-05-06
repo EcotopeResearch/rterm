@@ -196,17 +196,15 @@ addWeather <- function(term, stationid = NULL, weather = NULL, timeVar = NULL, t
 
 addMethod <- function(term, method, ...) {
   
-  if(!(method %in% c("change-point", "degree-day"))) {
-    stop(paste("Unrecognized method", method))
-  }
-  
   controls <- eval(substitute(alist(...)))
   
   # I need default options... store them here
-  if(method == "change-point") {
+  if(tolower(method) %in% c("change-point", "changepoint", "cp")) {
     defaults <- list(heating = NULL, cooling = NULL, se = TRUE, nreps = 200, parametric = NULL, lambda = 0)
-  } else if(method == "degree-day") {
+  } else if(tolower(method) %in% c("degree-day", "degreeday", "dd")) {
     defaults <- list(heating = NULL, cooling = NULL, se = TRUE, nreps = 200, parametric = NULL, lambda = 0) 
+  } else {
+    stop(paste("Unrecognized Method", method))
   }
   
   
@@ -231,7 +229,7 @@ evaluate <- function(term) {
   
   term <- linkWeatherToData(term)
   
-  methodWeather <- expand.grid(names(term$methods), names(term$weather))
+  methodWeather <- expand.grid(seq_along(term$methods), seq_along(term$weather))
   
   term <- Map(function(weather, method) {
     evalOne(term$data, term$weather[[weather]], term$methods[[method]])
@@ -240,7 +238,74 @@ evaluate <- function(term) {
   term
 }
 
+evalOne <- function(term, weather, method) {
+  
+  lowerName <- tolower(names(method))
+  if(lowerName %in% c("changepoint", "change-point", "cp")) {
+    abc <- 1
+  } else if(lowerName %in% c("degreeday", "degree-day", "dd")) {
+    term$methods[[method]]$
+    do.call("ddlm", )
+  } else {
+    warning(paste("Unrecognized method", names(method), "skipping"))
+  }
+  
+}
 
+ddlm.fit <- function(term, weather, heating = TRUE, cooling = FALSE, intercept = TRUE) {
+  if(is.null(weather$rows)) {
+    stop("Must link data to weather before model fitting")
+  }
+  base <- .Call("findBaseTemp", 
+                as.numeric(term$weather[[weather]]$aveTemp),
+                as.integer(term$weather[[weather]]$rows), 
+                as.numeric(term$data$energy),
+                rep(1, nrow(term$data)),
+                as.integer(heating), as.integer(cooling), 
+                2L, as.integer(intercept))
+  
+  term <- deriveVar(term, "degreeday", base)
+  
+  
+  # deriveVar <- function(term, type, base, cooling = FALSE)
+  
+  
+}
+
+
+print.term <- function(term) {
+  if(!is.null(term$data)) {
+    print(paste("Data:", 
+                nrow(term$data),
+                "observations from", min(term$data$dateStart),
+                "to", max(term$data$dateEnd)))
+  } else {
+    print("No Data Associated")
+  }
+  
+  nweather <- length(term$weather)
+  if(!nweather) {
+    print("No Weather Associated")
+  } else {
+    print(paste(nweather, "Weather Files:",
+                paste(names(term$weather), collapse = ", ")))
+  }
+  
+  nmethods <- length(term$methods)
+  if(!nmethods) {
+    print("No Methods Associated")
+  } else {
+    print(paste(nmethods, "Methods:",
+                paste(names(term$methods), collapse = ", ")))
+  }
+  
+  nmodels <- length(term$models)
+  if(!nmodels) {
+    print("No Models Evaluated")
+  } else {
+    print("Need to summarize models.")
+  }
+}
 
 
 

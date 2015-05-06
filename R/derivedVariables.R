@@ -40,10 +40,10 @@ deriveVar <- function(term, type, base, cooling = FALSE) {
     suffix <- "xheat"
   }
   
-  if(type %in% c("change-point", "cp")) {
+  if(type %in% c("change-point", "cp", "changepoint")) {
     ctype <- 1L
     suffix2 <- "cp"
-  } else if(type %in% c("degree-day", "dd")) {
+  } else if(type %in% c("degree-day", "dd", "degreeday")) {
     ctype <- 2L
     suffix2 <- "dd"
   }
