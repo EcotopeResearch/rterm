@@ -177,14 +177,16 @@ SEXP findBaseTemp(SEXP temps, SEXP rows, SEXP energy, SEXP weights, SEXP heating
   double *w = REAL(weights);
   
   
-  // Allocate space to hold the change points
-  double *cp = malloc(nCps * sizeof(double));
+  // Allocate space to hold the coefficients
+  // Order = Intercept, heatingBase, heatingSlope, coolingBase, coolingSlope
+  int ncoefs = *cIntercept + 2 * nCps;
+  double *cp = malloc(ncoefs * sizeof(double));
   findBaseTempC(cTemp, cRows, cEnergy, w, ndata, nweather, cp, *cHeating, *cCooling, *cType, *cIntercept);
   
   
   // Create an R object to return and populate it with the coefficients
-  SEXP ans = PROTECT(allocVector(REALSXP, nCps));
-  for(int i = 0; i < nCps; i++) {
+  SEXP ans = PROTECT(allocVector(REALSXP, ncoefs));
+  for(int i = 0; i < ncoefs; i++) {
     REAL(ans)[i] = cp[i];
   }
 
@@ -226,6 +228,7 @@ int findBaseTempC(double *temps, int *rows, double *energy, double *w, int ndata
   } else {
     heatcool = 0;
   }
+  int ncoefs = intercept + nCps * 2;
 
   //Set up an array to hold truncated basis function vars for heating/cooling
   //for the regression.
@@ -246,21 +249,34 @@ int findBaseTempC(double *temps, int *rows, double *energy, double *w, int ndata
     }
   }
   
-  //Do the first, coarse search.
+  // Do the first, coarse search.
   ssBest = findBestBaseTemp(X, temps, rows, energy, w, ndata, nweather, cp, nCps, heatcool, cpVarTmp, betahat, tmin1, tmax1, tmin2, tmax2, tstepLarge, type, intercept);
 
-  //Set the parameters for the second, fine search
-  tmin1 = cp[0] - tstep2;
-  tmax1 = cp[0] + tstep2;
-  if(nCps == 2) {
-    tmin2 = cp[1] - tstep2;
-    tmax2 = cp[1] + tstep2;
-  }
-    
-  
-  // Do the second, fine search.
-  ssBest = findBestBaseTemp(X, temps, rows, energy, w, ndata, nweather, cp, nCps, heatcool, cpVarTmp, betahat, tmin1, tmax1, tmin2, tmax2, tstepSmall, type, intercept);
+  // Check if ssBest == 0, that means we never found a valid solution
+  if(ssBest == 0) {
+     for(int i = 0; i < ncoefs; i++) {
+       cp[i] = 0;
+     }
+  } else {
 
+    //Set the parameters for the second, fine search
+    tmin1 = cp[intercept] - tstep2;
+    tmax1 = cp[intercept] + tstep2;
+    if(nCps == 2) {
+      tmin2 = cp[intercept + 2] - tstep2;
+      tmax2 = cp[intercept + 2] + tstep2;
+    }
+  
+    // Do the second, fine search.
+    ssBest = findBestBaseTemp(X, temps, rows, energy, w, ndata, nweather, cp, nCps, heatcool, cpVarTmp, betahat, tmin1, tmax1, tmin2, tmax2, tstepSmall, type, intercept);
+
+    // Check if ssBest == 0, that means we never found a valid solution
+    if(ssBest == 0) {
+      for(int i = 0; i < ncoefs; i++) {
+        cp[i] = 0;
+      }
+    }
+  }
 
   free(X);
   free(cpVarTmp);
@@ -300,11 +316,25 @@ double findBestBaseTemp(double *X, double *temps, int *rows, double *energy, dou
       //Check if the sum of squared errors is better
       if(ssBest == 0 && betahat[intercept] >= 0) {
         ssBest = ssTmp;
-        cp[0] = tmin1;
+        if(intercept) {
+          cp[0] = betahat[0];
+          cp[1] = t;
+          cp[2] = betahat[1];
+        } else {
+          cp[0] = t;
+          cp[1] = betahat[0];
+        }
       } else if(betahat[intercept] >= 0) {
         if(ssTmp < ssBest) {
           ssBest = ssTmp;
-          cp[0] = t;
+          if(intercept) {
+            cp[0] = betahat[0];
+            cp[1] = t;
+            cp[2] = betahat[1];
+          } else {
+            cp[0] = t;
+            cp[1] = betahat[0];
+          }
         }
       }
       
@@ -328,15 +358,35 @@ double findBestBaseTemp(double *X, double *temps, int *rows, double *energy, dou
         //printf("t = %f, t2 = %f, bl = %f, hs = %f, cs = %f, ss = %f\n", t, t2, betahat[0], betahat[1], betahat[2], ssTmp);
 
         //Check if the sum of squared errors is better
-        if(ssBest == 0 && betahat[1] >= 0 && betahat[2] >= 0) {
+        if(ssBest == 0 && betahat[intercept] >= 0 && betahat[intercept + 1] >= 0) {
           ssBest = ssTmp;
-          cp[0] = tmin1;
-          cp[1] = tmin2;
+          if(intercept) {
+            cp[0] = betahat[0];
+            cp[1] = t;
+            cp[2] = betahat[1];
+            cp[3] = t2;
+            cp[4] = betahat[2];
+          } else {
+            cp[0] = t;
+            cp[1] = betahat[1];
+            cp[2] = t2;
+            cp[3] = betahat[2];
+          }
         } else if(betahat[1] >= 0 && betahat[2] >= 0) {
           if(ssTmp < ssBest) {
             ssBest = ssTmp;
-            cp[0] = t;
-            cp[1] = t2;
+            if(intercept) {
+              cp[0] = betahat[0];
+              cp[1] = t;
+              cp[2] = betahat[1];
+              cp[3] = t2;
+              cp[4] = betahat[2];
+            } else {
+              cp[0] = t;
+              cp[1] = betahat[1];
+              cp[2] = t2;
+              cp[3] = betahat[2];
+            }
           }
         }
         

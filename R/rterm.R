@@ -27,6 +27,7 @@ addData <- function(term, data, formula = NULL, energyVar = NULL, dateStartVar =
     mf <- model.frame(formula, data)
     y <- model.response(mf)
     term$data <- data.frame(mf)
+    names(term$data)[1] <- "energy"
     
     # We're going to coerce POSIX times to dates... note that 
     # none of this methodology works sub-daily anyway.
@@ -68,7 +69,6 @@ addData <- function(term, data, formula = NULL, energyVar = NULL, dateStartVar =
       }
 
     } else if(ncol(term$data) == 2) {
-      print(str(term$data))
       if(varClasses[2] == "Date") {
         warning("One Date variable found, assuming this is the end date")
         names(term$data)[2] <- "dateEnd"
@@ -114,10 +114,13 @@ addData <- function(term, data, formula = NULL, energyVar = NULL, dateStartVar =
     stop("Error, must specify 2 of the following: start date, end date, days")
   }
   
-  
-  if(!daily) {
-    term$data$energy <- term$data$energy / term$data$days
+  if(daily) {
+    term$data$dailyEnergy <- term$data$energy
+    term$data$energy <- term$data$dailyEnergy * term$data$days
+  } else {
+    term$data$dailyEnergy <- term$data$energy / term$data$days
   }
+  
   
   term
 }
@@ -168,26 +171,43 @@ addWeather <- function(term, stationid = NULL, weather = NULL, timeVar = NULL, t
   }
   
   # Interpolate missing values, if necessary
-  missingTemps <- is.na(term$weather[[name]]$aveTemp)
-  if(sum(missingTemps) > 0) {
-    if(sum(missingTemps) / length(missingTemps) > .25) {
-      warning("More than 25% of temperatures are missing. Consider another weather source")
-    }
-    
-    term$weather[[name]]$missing <- FALSE
-    term$weather[[name]]$missing[missingTemps] <- TRUE
-    
-    x <- term$weather[[name]]
-    x$sin1 <- sin(as.numeric(x$date) / 365 * 2 * pi)
-    x$cos1 <- cos(as.numeric(x$date) / 365 * 2 * pi)
-    
-    mod <- lm(aveTemp ~ sin1 + cos1, data = x)
-    x$fitted <- predict(mod, x)
-  
-    term$weather[[name]]$aveTemp[missingTemps] <- x$fitted[missingTemps]
-    term$weather$sin1 <- NULL
-    term$weather$sin2 <- NULL
+  if(!is.null(term$weather[[name]]$time)) {
+    tvar <- "time"
+  } else {
+    tvar <- "date"
   }
+  g <- splinefun(term$weather[[name]][, tvar], term$weather[[name]]$aveTemp, method = "natural")
+  
+  term$weather[[name]]$rawTemp <- term$weather[[name]]$aveTemp
+  term$weather[[name]]$aveTemp <- g(term$weather[[name]][, tvar])
+  term$weather[[name]]$missing <- FALSE
+  missingTemps <- is.na(term$weather[[name]]$rawTemp)
+  if(sum(missingTemps) > 0) {
+    term$weather[[name]]$missing[missingTemps] <- TRUE
+  }
+  
+  
+#   
+#   
+#   if(sum(missingTemps) > 0) {
+#     if(sum(missingTemps) / length(missingTemps) > .25) {
+#       warning("More than 25% of temperatures are missing. Consider another weather source")
+#     }
+#     
+#     term$weather[[name]]$missing <- FALSE
+#     term$weather[[name]]$missing[missingTemps] <- TRUE
+#     
+#     x <- term$weather[[name]]
+#     x$sin1 <- sin(as.numeric(x$date) / 365 * 2 * pi)
+#     x$cos1 <- cos(as.numeric(x$date) / 365 * 2 * pi)
+#     
+#     mod <- lm(aveTemp ~ sin1 + cos1, data = x)
+#     x$fitted <- predict(mod, x)
+#   
+#     term$weather[[name]]$aveTemp[missingTemps] <- x$fitted[missingTemps]
+#     term$weather$sin1 <- NULL
+#     term$weather$sin2 <- NULL
+#   }
 
   
   term
@@ -200,9 +220,9 @@ addMethod <- function(term, method, ...) {
   
   # I need default options... store them here
   if(tolower(method) %in% c("change-point", "changepoint", "cp")) {
-    defaults <- list(heating = NULL, cooling = NULL, se = TRUE, nreps = 200, parametric = NULL, lambda = 0)
+    defaults <- list(heating = NULL, cooling = NULL, intercept = TRUE, se = TRUE, nreps = 200, parametric = NULL, lambda = 0)
   } else if(tolower(method) %in% c("degree-day", "degreeday", "dd")) {
-    defaults <- list(heating = NULL, cooling = NULL, se = TRUE, nreps = 200, parametric = NULL, lambda = 0) 
+    defaults <- list(heating = NULL, cooling = NULL, intercept = TRUE, se = TRUE, nreps = 200, parametric = NULL, lambda = 0) 
   } else {
     stop(paste("Unrecognized Method", method))
   }
@@ -230,47 +250,166 @@ evaluate <- function(term) {
   term <- linkWeatherToData(term)
   
   methodWeather <- expand.grid(seq_along(term$methods), seq_along(term$weather))
+  methodWeather$name <- make.names(paste(names(term$methods)[methodWeather[, 1]],
+                              names(term$weather)[methodWeather[, 2]]))
   
-  term <- Map(function(weather, method) {
-    evalOne(term$data, term$weather[[weather]], term$methods[[method]])
+  models <- Map(function(method, weather) {
+    evalOne(term, method, weather)
   }, methodWeather[, 1], methodWeather[, 2])
+  names(models) <- methodWeather$name
   
+  term$models <- models
   term
 }
 
-evalOne <- function(term, weather, method) {
+evalOne <- function(term, method, weather) {
   
-  lowerName <- tolower(names(method))
+  # Only use rows for which we have weather... causes segfault otherwise
+  term$data <- term$data[unique(term$weather[[weather]]$rows), ]
+  
+  lowerName <- tolower(names(term$methods)[method])
   if(lowerName %in% c("changepoint", "change-point", "cp")) {
-    abc <- 1
+    mod <- cplm(term$data, term$weather[[weather]], term$methods[[method]])
   } else if(lowerName %in% c("degreeday", "degree-day", "dd")) {
-    term$methods[[method]]$
-    do.call("ddlm", )
+    mod <- ddlm(term$data, term$weather[[weather]], term$methods[[method]])
   } else {
     warning(paste("Unrecognized method", names(method), "skipping"))
   }
   
+  return(mod)
 }
 
-ddlm.fit <- function(term, weather, heating = TRUE, cooling = FALSE, intercept = TRUE) {
+
+ddlm <- function(data, weather, controls) {
+  coefs <- ddlm.fit(data, weather, controls$heating, controls$cooling, controls$intercept)
+  # class(coefs) <- "ddlm"
+  return(coefs)
+}
+
+cplm <- function(data, weather, controls) {
+  coefs <- cplm.fit(data, weather, controls$heating, controls$cooling, controls$intercept)
+  # class(coefs) <- "cplm"
+  return(coefs)  
+}
+
+
+xlm.fit <- function(data, weather, heating = TRUE, cooling = FALSE, intercept = TRUE, type = 1L) {
+  
+  if(type == 1) {
+    y <- as.numeric(data$dailyEnergy)
+  } else if(type == 2) {
+    y <- as.numeric(data$dailyEnergy)
+  }
+  
+  coefs <- .Call("findBaseTemp", 
+                 as.numeric(weather$aveTemp),
+                 as.integer(weather$rows), 
+                 y,
+                 rep(1, nrow(data)),
+                 as.integer(heating), as.integer(cooling), 
+                 as.integer(type), as.integer(intercept))
+  
+  # Now we need to name them
+  if(intercept) {
+    if(heating & cooling) {
+      names(coefs) <- c("baseLoad", "heatingBase", "heatingSlope", "coolingBase", "coolingSlope")
+    } else if(heating) {
+      names(coefs) <- c("baseLoad", "heatingBase", "heatingSlope")
+    } else if(cooling) {
+      names(coefs) <- c("baseLoad", "coolingBase", "coolingSlope")
+    } else {
+      names(coefs) <- c("baseLoad")
+    }
+  } else {
+    if(heating & cooling) {
+      names(coefs) <- c("heatingBase", "heatingSlope", "coolingBase", "coolingSlope")
+    } else if(heating) {
+      names(coefs) <- c("heatingBase", "heatingSlope")
+    } else if(cooling) {
+      names(coefs) <- c("coolingBase", "coolingSlope")
+    } else {
+      warning("No base load, heating, or cooling results in no model")
+    }
+  }
+  
+  return(coefs)
+}
+
+
+cplm.fit <- function(data, weather, heating = TRUE, cooling = FALSE, intercept = TRUE) {
   if(is.null(weather$rows)) {
     stop("Must link data to weather before model fitting")
   }
-  base <- .Call("findBaseTemp", 
-                as.numeric(term$weather[[weather]]$aveTemp),
-                as.integer(term$weather[[weather]]$rows), 
-                as.numeric(term$data$energy),
-                rep(1, nrow(term$data)),
-                as.integer(heating), as.integer(cooling), 
-                2L, as.integer(intercept))
   
-  term <- deriveVar(term, "degreeday", base)
+  coefs <- xlm.fit(data, weather, heating, cooling, intercept, 1L)
   
+  # Add logic to check whether we conclusively found a change point
   
-  # deriveVar <- function(term, type, base, cooling = FALSE)
-  
-  
+  return(coefs)
 }
+
+
+
+ddlm.fit <- function(data, weather, heating = TRUE, cooling = FALSE, intercept = TRUE) {
+  if(is.null(weather$rows)) {
+    stop("Must link data to weather before model fitting")
+  }
+  
+  coefs <- xlm.fit(data, weather, heating, cooling, intercept, 2L)
+  
+  # In the case of degree day, we need to refit the model in R 
+  # accounting for different time intervals in the weather data...
+
+  if(!is.null(weather$time) & 0) {
+    days <- median(diff(as.numeric(weather$time)) / 3600 / 24)
+    # print(paste("Scaling by # of days =", days))
+    if(heating) {
+      data$xheating <- .Call("deriveVar", 
+                             as.numeric(weather$aveTemp), 
+                             as.integer(weather$rows), 
+                             as.numeric(coefs['heatingBase']), 
+                             as.integer(nrow(data)), 
+                             1L, 2L) * days
+    }
+    
+    if(cooling) {
+      data$xcooling <- .Call("deriveVar", 
+                             as.numeric(weather$aveTemp), 
+                             as.integer(weather$rows), 
+                             as.numeric(coefs['coolingBase']), 
+                             as.integer(nrow(data)), 
+                             2L, 2L) * days
+    }
+    
+    # Select the appropriate formula
+    if(intercept & heating & cooling) {
+      form <- formula(dailyEnergy ~ xheating + xcooling)
+    } else if(!intercept & heating & cooling) {
+      form <- formula(dailyEnergy ~ 0 + xheating + xcooling)
+    } else if(intercept & heating & !cooling) {
+      form <- formula(dailyEnergy ~ xheating)
+    } else if(!intercept & heating & !cooling) {
+      form <- formula(dailyEnergy ~ 0 + xheating)
+    } else if(intercept & !heating & cooling) {
+      form <- formula(dailyEnergy ~ xcooling)
+    } else if(!intercept & !heating & cooling) {
+      form <- formula(dailyEnergy ~ 0 + xcooling)
+    }
+    
+    mod <- lm(form, data)
+    if(heating) {
+      coefs['heatingSlope'] <- as.numeric(coef(mod)['xheating'])
+    }
+    if(cooling) {
+      coefs['coolingSlope'] <- as.numeric(coef(mod)['xcooling'])
+    }
+  }
+
+  
+  return(coefs)
+}
+
+
 
 
 print.term <- function(term) {
@@ -303,7 +442,7 @@ print.term <- function(term) {
   if(!nmodels) {
     print("No Models Evaluated")
   } else {
-    print("Need to summarize models.")
+    print(do.call("rbind", term$models))
   }
 }
 

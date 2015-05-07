@@ -19,6 +19,7 @@ linkWeatherToData <- function(term) {
                     as.numeric(term$data$dateEnd),
                     as.numeric(y$date))
     y$rows[y$rows <= 0] <- NA
+    y <- y[!is.na(y$rows), ]
     y
   })
   
@@ -30,7 +31,7 @@ linkWeatherToData <- function(term) {
 
 
 
-deriveVar <- function(term, type, base, cooling = FALSE) {
+deriveVar <- function(term, type, base, cooling = FALSE, weather = NULL) {
   
   if(cooling) {
     heatcool <- 2L
@@ -48,6 +49,14 @@ deriveVar <- function(term, type, base, cooling = FALSE) {
     suffix2 <- "dd"
   }
   
+  if(!is.null(weather)) {
+    if(is.numeric(weather)) {
+      
+    } else if(is.character(weather)) {
+      
+    }
+  }
+  
   newvars <- lapply(term$weather, function(x) {
     x <- x[!is.na(x$rows), ]
     newvar <- .Call("deriveVar", 
@@ -58,7 +67,7 @@ deriveVar <- function(term, type, base, cooling = FALSE) {
           heatcool,
           ctype)
     
-    if(!is.null(x$time)) {
+    if(!is.null(x$time) & ctype == 2) {
       days <- median(diff(as.numeric(x$time)) / 3600 / 24)
       print(paste("Scaling by # of days =", days))
       newvar <- newvar * days

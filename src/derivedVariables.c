@@ -76,7 +76,7 @@ SEXP deriveVar(SEXP temp, SEXP rows, SEXP base, SEXP ndata, SEXP heatcool, SEXP 
 // heatcool 1 for heating, 2 for cooling
 int deriveVarC(double *temp, double base, double *newvar, int *rows, int heatcool, int ndata, int nweather, int type) {
   
-  int tmpRow;
+  int tmpRow, tmpInd;
   double tmpVal;
   
   // For each row of the data, count how many weather observations correspond
@@ -85,6 +85,13 @@ int deriveVarC(double *temp, double base, double *newvar, int *rows, int heatcoo
     ns[i] = 0;
   }
   for(int j = 0; j < nweather; j++) {
+    int tmpInd = rows[j] - 1;
+    if(tmpInd < 0 || tmpInd > (ndata - 1)) {
+      fprintf(stderr, "Row Association of Weather to Data does not Match\n");
+      fprintf(stderr, "Weather File Row %d, data file row %d\n", j, tmpInd);
+      fprintf(stderr, "ndata = %d\n", ndata);
+      return 1;
+    }
     ns[rows[j] - 1]++;
   }
   
@@ -120,7 +127,7 @@ int deriveVarC(double *temp, double base, double *newvar, int *rows, int heatcoo
       }
       if(tmpVal < 0) tmpVal = 0;
       
-      newvar[tmpRow] += tmpVal;
+      newvar[tmpRow] += tmpVal / ns[tmpRow];
     }
     
   }
