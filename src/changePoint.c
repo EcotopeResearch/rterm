@@ -444,6 +444,7 @@ SEXP l1_path(SEXP temp, SEXP energy, SEXP cps, SEXP lambdas) {
 }
 
 
+
 //Do an l1 penalized changepoint model. Return heating/cooling
 SEXP cpl1(SEXP temp, SEXP energy, SEXP lambdax) {
   double mse_cur, mse_best, lambda, ss_tmp, fitted;
@@ -604,6 +605,9 @@ SEXP cpl1(SEXP temp, SEXP energy, SEXP lambdax) {
 }
 
 
+
+
+/*
 //Function to return the optimal coefficients from an L1 penalized regression
 //Starts at least squares and ratchets up the penalty until there is no more 
 //improvement in the leave-one-out Cross Validation error
@@ -631,6 +635,10 @@ double l1_best(double *xHeating, double *xCooling, int n, double *y, double *bet
   
   return mse_last;
 }
+
+*/
+
+
 
 //calculate a cross-validation mean-squared error
 double cv_mse(double *xHeating, double *xCooling, int n, double *y, double lambda) {
@@ -666,6 +674,9 @@ double cv_mse(double *xHeating, double *xCooling, int n, double *y, double lambd
   return mse;
 }
 
+
+
+/*
 //Fits the coordinate descent algorithm for a single value of lambda
 int l1_fit(double *xHeating, double *xCooling, int n, double *y, double lambda, double *betahat) {
   double max_error = 1;
@@ -695,7 +706,11 @@ int l1_fit(double *xHeating, double *xCooling, int n, double *y, double lambda, 
   free(betahat_last);
   return 0;
 }
+*/
 
+
+
+/*
 //Do one round of updating the betahat coefficients for l1_fit
 int one_wheel(double *xHeating, double *xCooling, int n, double *y, double lambda, double *betahat) {
   double tmp1, tmp2;
@@ -749,6 +764,8 @@ int one_wheel(double *xHeating, double *xCooling, int n, double *y, double lambd
 
   return 0;  
 }
+
+*/
 
 
 //C Function callable from R bootstrap a change point model

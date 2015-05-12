@@ -116,7 +116,7 @@ int deriveVarC(double *temp, double base, double *newvar, int *rows, int heatcoo
       }
       if(newvar[i] < 0) newvar[i] = 0;
     }
-  } else {
+  } else if(type == 2) {
     // With degree day we transform & then sum
     for(int i = 0; i < nweather; i++) {
       tmpRow = rows[i] - 1;
@@ -130,27 +130,18 @@ int deriveVarC(double *temp, double base, double *newvar, int *rows, int heatcoo
       newvar[tmpRow] += tmpVal / ns[tmpRow];
     }
     
+  } else {
+    // Just return the average temperature
+    for(int i = 0; i < nweather; i++) {
+      tmpRow = rows[i] - 1;
+      newvar[tmpRow] += temp[i] / ns[tmpRow];
+    }
   }
   
   
   free(ns);
   return 0;
 }
-
-
-SEXP degreeDayVar(SEXP temp, SEXP rows, SEXP base, SEXP ndata, SEXP heatcool) {
-  
-  SEXP results = PROTECT(allocVector(REALSXP, 10));
-  
-  return results;
-}
-
-int degreeDayVarC(double *temp, double base, double *newvar, int *rows, int heatcool, int ndata, int nweather) {
-  
-  
-  return 0;
-}
-
 
 
 
