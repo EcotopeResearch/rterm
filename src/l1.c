@@ -11,6 +11,7 @@ either change point or variable-base-degree-day
 #include "classicModels.h"
 #include "derivedVariables.h"
 #include "lmFast.h"
+#include "l1.h"
 
 
 
