@@ -6,7 +6,6 @@
 #include <stdio.h>
 
 #include "changePoint.h"
-#include "lmFast.h"
 
 
 
@@ -400,7 +399,7 @@ double findBestChangePoint(double *X, int n, double *temp, double *energy, doubl
 
 
 
-
+/*
 //Application #2) A self-contained regression w/ a lambda for L1 penalization
 SEXP l1_path(SEXP temp, SEXP energy, SEXP cps, SEXP lambdas) {
   double *cTemp = REAL(temp);
@@ -444,7 +443,7 @@ SEXP l1_path(SEXP temp, SEXP energy, SEXP cps, SEXP lambdas) {
   return results;
 }
 
-
+*/
 
 //Do an l1 penalized changepoint model. Return heating/cooling
 SEXP cpl1(SEXP temp, SEXP energy, SEXP lambdax) {
