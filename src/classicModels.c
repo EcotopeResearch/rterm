@@ -8,6 +8,7 @@
 #include "classicModels.h"
 #include "derivedVariables.h"
 #include "lmFast.h"
+#include "utility.h"
 
 
 
@@ -271,18 +272,6 @@ double ssError(double *X, double *y, int n, int p, double *betahat) {
   free(resids);
   
   return ss;
-}
-
-
-
-double vecsum(double *x, int n) {
-  double total = 0.0;
-  
-  for(int i = 0; i < n; i++) {
-    total += x[i];
-  }
-  
-  return total;
 }
 
 

@@ -3,8 +3,6 @@ Header File for Functions to derive change-point or degree day variables
 Mike Logsdon
 Spring 2015
 */
-#include <R.h>
-#include <Rinternals.h>
 
 // Map weather file dates to energy use dates
 SEXP linkWeatherToData(SEXP dateStart, SEXP dateEnd, SEXP date);

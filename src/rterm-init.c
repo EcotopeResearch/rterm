@@ -1,4 +1,3 @@
-#include "changePoint.h"
 #include <R_ext/Rdynload.h>
 
 /*

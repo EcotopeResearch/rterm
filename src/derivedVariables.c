@@ -3,6 +3,7 @@
 #include <stdio.h>
 
 #include "derivedVariables.h"
+#include "utility.h"
 
 
 SEXP linkWeatherToData(SEXP dateStart, SEXP dateEnd, SEXP date) {

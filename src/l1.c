@@ -12,6 +12,7 @@ either change point or variable-base-degree-day
 #include "derivedVariables.h"
 #include "lmFast.h"
 #include "l1.h"
+#include "utility.h"
 
 
 

@@ -1,5 +1,5 @@
 exportPattern("^[[:alpha:]]+")
-useDynLib(rterm, findChangePoint)
-useDynLib(rterm, cpl1)
-useDynLib(rterm, bootstrapChangePoint)
+useDynLib(rterm, lmFast)
+useDynLib(rterm, findBaseTemp)
+useDynLib(rterm, l1)
 importFrom(dplyr, "%>%")

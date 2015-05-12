@@ -19,11 +19,4 @@ int baseTempRegression(double *temp, int n, double *energy, double *w, int heati
 int simulateData(double *temp, int n, double *energyNew, int heating, int cooling, double *coefs, double sigma, int type);
 */
 
-//Utility functions
-double max(double a, double b);
-double min(double a, double b);
-double vecmin(double *x, int n);
-double vecmax(double *x, int n);
-double vecsum(double *x, int n);
-int vecprint(double *x, int n);
-double rnorm1(double mu, double sigma);
+
