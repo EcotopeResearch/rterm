@@ -31,7 +31,7 @@ linkWeatherToData <- function(term) {
 
 
 
-deriveVar <- function(term, type, base, cooling = FALSE, weather = NULL) {
+deriveVar <- function(term, type, base = 60, cooling = FALSE, weather = NULL) {
   
   if(cooling) {
     heatcool <- 2L
@@ -47,6 +47,11 @@ deriveVar <- function(term, type, base, cooling = FALSE, weather = NULL) {
   } else if(type %in% c("degree-day", "dd", "degreeday")) {
     ctype <- 2L
     suffix2 <- "dd"
+  } else if(type %in% c("oat", "average")) {
+    ctype <- 3L
+    suffix <- "oat"
+    suffix2 <- ""
+    base <- 0
   }
   
   if(!is.null(weather)) {
@@ -58,6 +63,9 @@ deriveVar <- function(term, type, base, cooling = FALSE, weather = NULL) {
   }
   
   newvars <- lapply(term$weather, function(x) {
+    if(is.null(x$rows)) {
+      stop("Must link weather to data before deriving variables")
+    }
     x <- x[!is.na(x$rows), ]
     newvar <- .Call("deriveVar", 
           as.numeric(x$aveTemp), 

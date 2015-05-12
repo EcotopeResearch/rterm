@@ -1,12 +1,15 @@
 
 
-newTerm <- function() {
+newTerm <- function(name = NULL) {
   term <- list()
   term$data <- NULL
   term$weather <- list()
   term$methods <- list()
   term$models <- list()
   class(term) <- "term"
+  if(!is.null(name)) {
+    attr(term, "name") <- name
+  }
   return(term)
 }
 
@@ -127,7 +130,7 @@ addData <- function(term, data, formula = NULL, energyVar = NULL, dateStartVar =
 
 
 
-addWeather <- function(term, stationid = NULL, weather = NULL, timeVar = NULL, tempVar = NULL, name = NULL) {
+addWeather <- function(term, weather = NULL, formula = NULL, stationid = NULL, timeVar = NULL, tempVar = NULL, name = NULL) {
   
   ind <- length(term$weather)
   # Check to see if this weather needs a name
@@ -151,9 +154,7 @@ addWeather <- function(term, stationid = NULL, weather = NULL, timeVar = NULL, t
     }
   } else if(!is.null(weather)) {
     # Check if custom weather was provided
-    if(!is.null(weather$date) & !is.null(weather$aveTemp)) {
-      term$weather[[name]] <- weather  
-    } else if(!is.null(timeVar) & !is.null(tempVar)) {
+    if(!is.null(timeVar) & !is.null(tempVar)) {
       term$weather[[name]] <- data.frame("aveTemp" = weather[, tempVar])
       if(inherits(weather[, timeVar], "POSIXt")) {
         term$weather[[name]]$time <- weather[, timeVar]
@@ -163,11 +164,29 @@ addWeather <- function(term, stationid = NULL, weather = NULL, timeVar = NULL, t
       } else {
         stop("Weather data time variable should be either Date class or POSIX time class")
       }
+    } else if(!is.null(formula)) {
+      # Need to parse the formula
+      mf <- model.frame(formula, weather)
+      term$weather[[name]] <- data.frame(mf)
+      if(!inherits(term$weather[[name]][, 1], "numeric")) {
+        stop("Temperature variable must be numeric")
+      }
+      names(term$weather[[name]])[1] <- "aveTemp"
+      if(inherits(term$weather[[name]][, 2], "POSIXt")) {
+        names(term$weather[[name]])[2] <- "time"
+        term$weather[[name]]$date <- as.Date(term$weather[[name]]$time)
+      } else if(inherits(term$weather[[name]][, 1])) {
+        names(term$weather[[name]])[2] <- "date"
+      } else {
+        stop("Time variable must be either POSIXt or Date")
+      }
+      names(term$data)[1] <- "energy"
+    } else if(!is.null(weather$date) & !is.null(weather$aveTemp)) {
+      term$weather[[name]] <- weather  
     } else {
       stop(paste("When providing your own weather, must specify timeVar and tempVar",
            "See help(addWeather)"))
     }
-    
   }
   
   # Interpolate missing values, if necessary
@@ -214,18 +233,38 @@ addWeather <- function(term, stationid = NULL, weather = NULL, timeVar = NULL, t
 }
 
 
-addMethod <- function(term, method, ...) {
+addMethod <- function(term, method, name = NULL, ...) {
   
+
   controls <- eval(substitute(alist(...)))
   
   # I need default options... store them here
   if(tolower(method) %in% c("change-point", "changepoint", "cp")) {
+    method <- "changepoint"
     defaults <- list(heating = NULL, cooling = NULL, intercept = TRUE, se = TRUE, nreps = 200, parametric = NULL, lambda = 0)
   } else if(tolower(method) %in% c("degree-day", "degreeday", "dd")) {
+    method <- "degreeday"
     defaults <- list(heating = NULL, cooling = NULL, intercept = TRUE, se = TRUE, nreps = 200, parametric = NULL, lambda = 0) 
   } else {
     stop(paste("Unrecognized Method", method))
   }
+
+  ind <- length(term$methods[grep(method, names(term$methods))])
+  # Check to see if this weather needs a name
+  if(is.null(name)) {
+    if(ind) {
+      name <- paste0(method, ind)
+    } else {
+      name <- method
+    }
+  } else {
+    name <- make.names(paste(method, name))
+  }
+  
+  if(name %in% names(term$methods)) {
+    stop(paste("Method named", name, "already added to TERM"))
+  }
+
   
   
   # Loop through the default controls, over-riding where necessary
@@ -238,7 +277,7 @@ addMethod <- function(term, method, ...) {
   })
   names(toUse) <- names(defaults)
   
-  term$methods[[method]] <- toUse
+  term$methods[[name]] <- toUse
   
   
   term
@@ -267,10 +306,10 @@ evalOne <- function(term, method, weather) {
   # Only use rows for which we have weather... causes segfault otherwise
   term$data <- term$data[unique(term$weather[[weather]]$rows), ]
   
-  lowerName <- tolower(names(term$methods)[method])
-  if(lowerName %in% c("changepoint", "change-point", "cp")) {
+  #lowerName <- tolower(names(term$methods)[method])
+  if(length(grep("changepoint", names(term$methods)[method]))) {
     mod <- cplm(term$data, term$weather[[weather]], term$methods[[method]])
-  } else if(lowerName %in% c("degreeday", "degree-day", "dd")) {
+  } else if(length(grep("degreeday", names(term$methods[method])))) {
     mod <- ddlm(term$data, term$weather[[weather]], term$methods[[method]])
   } else {
     warning(paste("Unrecognized method", names(method), "skipping"))
@@ -281,13 +320,13 @@ evalOne <- function(term, method, weather) {
 
 
 ddlm <- function(data, weather, controls) {
-  coefs <- ddlm.fit(data, weather, controls$heating, controls$cooling, controls$intercept)
+  coefs <- ddlm.fit(data, weather, controls$heating, controls$cooling, controls$intercept, controls$lambda)
   # class(coefs) <- "ddlm"
   return(coefs)
 }
 
 cplm <- function(data, weather, controls) {
-  coefs <- cplm.fit(data, weather, controls$heating, controls$cooling, controls$intercept)
+  coefs <- cplm.fit(data, weather, controls$heating, controls$cooling, controls$intercept, controls$lambda)
   # class(coefs) <- "cplm"
   return(coefs)  
 }
@@ -336,30 +375,73 @@ xlm.fit <- function(data, weather, heating = TRUE, cooling = FALSE, intercept = 
 }
 
 
-cplm.fit <- function(data, weather, heating = TRUE, cooling = FALSE, intercept = TRUE) {
+cplm.fit <- function(data, weather, heating = NULL, cooling = NULL, intercept = TRUE, lambda = 0) {
   if(is.null(weather$rows)) {
     stop("Must link data to weather before model fitting")
   }
   
-  coefs <- xlm.fit(data, weather, heating, cooling, intercept, 1L)
+  l1Results <- .Call("l1", as.numeric(weather$aveTemp),
+                as.integer(weather$rows),
+                as.numeric(data$dailyEnergy),
+                lambda, 1L, as.integer(intercept))
+  names(l1Results) <- c("baseLoad", "heatingChangePoint", "heatingSlope", 
+                       "coolingChangePoint",  "coolingSlope")
+  
+  if(is.null(heating)) {
+    heating <- as.numeric(l1Results['heatingSlope']) > 0
+  }
+  if(is.null(cooling)) {
+    cooling <- as.numeric(l1Results['coolingSlope']) > 0
+  }
+
+  lsResults <- c("baseLoad" = NA, "heatingBase" = NA,
+                 "heatingSlope" = NA, "coolingBase" = NA,
+                 "coolingSlope" = NA)
+  if(!heating & !cooling & !intercept) {
+    
+  } else if(!heating & !cooling) {
+    lsResults['baseLoad'] <- mean(data$energy)
+  }
+  
+  lsCoefs <- xlm.fit(data, weather, heating, cooling, intercept, 1L)
+
+  for(coef in names(lsResults)) {
+    if(!is.null(lsCoefs[coef])) {
+      lsResults[coef] <- lsCoefs[coef]
+    }
+  }
   
   # Add logic to check whether we conclusively found a change point
   
-  return(coefs)
+  return(list("LS" = lsResults, "L1" = l1Results))
 }
 
 
 
-ddlm.fit <- function(data, weather, heating = TRUE, cooling = FALSE, intercept = TRUE) {
+ddlm.fit <- function(data, weather, heating = NULL, cooling = NULL, intercept = TRUE, lambda = 0) {
   if(is.null(weather$rows)) {
     stop("Must link data to weather before model fitting")
   }
   
-  coefs <- xlm.fit(data, weather, heating, cooling, intercept, 2L)
+  l1Results <- .Call("l1", as.numeric(weather$aveTemp),
+                  as.integer(weather$rows),
+                  as.numeric(data$dailyEnergy),
+                  lambda, 2L, as.integer(intercept))
+  names(l1Results) <- c("baseLoad", "heatingChangePoint", "heatingSlope", 
+                        "coolingChangePoint",  "coolingSlope")
+  
+  if(is.null(heating)) {
+    heating <- as.numeric(l1Results['heatingSlope']) > 0
+  }
+  if(is.null(cooling)) {
+    cooling <- as.numeric(l1Results['coolingSlope']) > 0
+  }
+  
+  
+  lsCoefs <- xlm.fit(data, weather, heating, cooling, intercept, 2L)
   
   # In the case of degree day, we need to refit the model in R 
   # accounting for different time intervals in the weather data...
-
   if(!is.null(weather$time) & 0) {
     days <- median(diff(as.numeric(weather$time)) / 3600 / 24)
     # print(paste("Scaling by # of days =", days))
@@ -398,21 +480,41 @@ ddlm.fit <- function(data, weather, heating = TRUE, cooling = FALSE, intercept =
     
     mod <- lm(form, data)
     if(heating) {
-      coefs['heatingSlope'] <- as.numeric(coef(mod)['xheating'])
+      lsCoefs['heatingSlope'] <- as.numeric(coef(mod)['xheating'])
     }
     if(cooling) {
-      coefs['coolingSlope'] <- as.numeric(coef(mod)['xcooling'])
+      lsCoefs['coolingSlope'] <- as.numeric(coef(mod)['xcooling'])
+    }
+  }
+
+  lsResults <- c("baseLoad" = NA, "heatingBase" = NA,
+                 "heatingSlope" = NA, "coolingBase" = NA,
+                 "coolingSlope" = NA)
+  if(!heating & !cooling & !intercept) {
+    
+  } else if(!heating & !cooling) {
+    lsResults['baseLoad'] <- mean(data$energy)
+  }
+  
+  for(coef in names(lsResults)) {
+    if(!is.null(lsCoefs[coef])) {
+      lsResults[coef] <- lsCoefs[coef]
     }
   }
 
   
-  return(coefs)
+  return(list("LS" = lsResults, "L1" = l1Results))
 }
 
 
 
 
 print.term <- function(term) {
+
+  if(!is.null(attr(term, "name", exact = TRUE))) {
+    print(attr(term, "name", exact = TRUE))
+  }
+
   if(!is.null(term$data)) {
     print(paste("Data:", 
                 nrow(term$data),
@@ -442,9 +544,29 @@ print.term <- function(term) {
   if(!nmodels) {
     print("No Models Evaluated")
   } else {
-    print(do.call("rbind", term$models))
+    print("Evaluated Models:")
+    coefTable <- do.call("rbind", lapply(term$models, function(x) x$LS))
+    coefTable <- data.frame(coefTable)
+    coefTable[] <- lapply(coefTable, function(x) if(!sum(!is.na(x))) NULL else x)
+    print(coefTable)
   }
 }
+
+
+plot.term <- function(term) {
+  nmodels <- length(term$models)
+  if(!nmodels) {
+    stop("No Models Evaluated, cannot plot")
+  }
+
+  # Need to get fitted values...
+
+  ggplot(term$data) + theme_bw() + 
+    geom_point(aes(x = dateStart, y = dailyEnergy))
+  
+}
+
+
 
 
 
