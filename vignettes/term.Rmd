@@ -1,0 +1,96 @@
+---
+title: "Vignette Title"
+author: "Vignette Author"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+---
+
+## Constructing a term
+
+Everything goes through a "term" S3 class. It may seem a bit complicated up front, but mastering the "term" methods makes this all much easier. We'll walk through an example for the Ecotope office bills, step-by-step, then put it all together at the end.
+
+### Initialize
+
+Use the constructor function newTerm() to initialize a new temperature-energy-regression-model.
+
+```{r}
+library(rterm)
+term <- newTerm()
+```
+
+
+### Add data
+
+Add data to the term with the addData() function.
+
+```{r}
+data(ecotope)
+head(ecotope)
+term <- addData(term, ecotope, kwhd ~ dateStart + dateEnd)
+term
+```
+
+There are several ways to add data with the addData() function. Above is a logical one for the ecotope dataset. Here are some more. If you try to add data to a term that already has data, it will overwrite and issue a warning.
+
+```{r}
+term <- addData(term, ecotope, kwhd ~ dateStart + days)
+term <- addData(term, ecotope, energyVar = "kwhd", dateEndVar = "dateEnd", daysVar ="days")
+```
+
+
+### Add Weather
+
+There is an addWeather() function to associate a weather file with the energy use dataset. In this case you can actually add multiple weather files, that will all get evaluated. This can be useful if you are unsure about which weather station to use, and want to know the consequences of the choice on inference.
+
+The two basic choices here are to either use the NOAA API from within rterm, or provide your own weather data. In this example we will do both. Note that the NOAA API can be pretty slow. For custom weather we will use the rterm package dataset "hourlyWeather", which is approximately 10 years worth of hourly NOAA QCLCD weather (the API provides GHCN data) from Sea-Tac Airport.
+
+```{r}
+stationSearch("seattle")
+term <- addWeather(term, stationid = "GHCND:USW00094290", name = "Sand Point")
+data(hourlyWeather)
+term <- addWeather(term, hourlyWeather, temp ~ time, name = "Sea-Tac Hourly")
+term
+```
+
+
+### Add Methodologies
+
+Use the addMethod() function to associate methodologies to the term.
+
+```{r}
+term <- addMethod(term, "change-point", heating = TRUE, cooling = FALSE)
+term <- addMethod(term, "degree-day", heating = TRUE, cooling = FALSE)
+term
+```
+
+
+### Evalute
+
+
+```{r}
+term <- evaluate(term)
+term
+```
+
+
+### Altogether now
+
+I recommend using the magrittr/dplyr pipe to set up the term in a single, hopefully readable statement as follows.
+
+
+```{r}
+library(dplyr)
+term <- newTerm() %>%
+  addData(ecotope, kwhd ~ dateStart + dateEnd) %>%
+  addWeather(stationid = "GHCND:USW00094290", name = "Sand Point") %>%
+  addWeather(hourlyWeather, temp ~ time, name="Sea-Tac Hourly") %>%
+  addMethod("changepoint", heating = TRUE, cooling = FALSE) %>%
+  addMethod("degreeday", heating = TRUE, cooling = FALSE) %>% 
+  evaluate()
+term
+```
+
