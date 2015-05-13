@@ -81,17 +81,14 @@ SEXP lmFastW(SEXP X, SEXP y, SEXP weights) {
 //lmFast Function to return coefs of a linear regression w/ weights
 int lmFastC(double *X, double *y, int n, int p, double *betahat) {
   
-  //Copy x & y.. 
-  double *X2 = malloc(n * p * sizeof(double));
-  double *y2 = malloc(n * sizeof(double));
   
   //Multiply X' X
   double *XTX = malloc(p * p * sizeof(double));
-  multXTX(X2, n, p, XTX);
+  multXTX(X, n, p, XTX);
   
   //Multiply X' y
   double *XTy = malloc(p * sizeof(double));
-  multXTy("T", X2, n, p, y2, XTy);
+  multXTy("T", X, n, p, y, XTy);
     
   //Solve for the coefs... as solution of X'X * beta = X'y
   solveLinearSystem(XTX, XTy, p);
@@ -104,10 +101,8 @@ int lmFastC(double *X, double *y, int n, int p, double *betahat) {
   //Free the memory we allocated
   free(XTX);
   free(XTy);
-  free(X2);
-  free(y2);
 
-  return 0;
+return 0;
 }
 
 
