@@ -12,7 +12,7 @@ linkWeatherToData <- function(term) {
   weatherSites <- names(term$weather)
   
   term$weather <- lapply(weatherSites, function(x) {
-    print(paste("Linking Weather to Data for", x))
+    # print(paste("Linking Weather to Data for", x))
     y <- term$weather[[x]]
     y$rows <- .Call("linkWeatherToData", 
                     as.numeric(term$data$dateStart), 
@@ -63,25 +63,7 @@ deriveVar <- function(term, type, base = 60, cooling = FALSE, weather = NULL) {
   }
   
   newvars <- lapply(term$weather, function(x) {
-    if(is.null(x$rows)) {
-      stop("Must link weather to data before deriving variables")
-    }
-    x <- x[!is.na(x$rows), ]
-    newvar <- .Call("deriveVar", 
-          as.numeric(x$aveTemp), 
-          as.integer(x$rows), 
-          as.numeric(base), 
-          as.integer(nrow(term$data)), 
-          heatcool,
-          ctype)
-    
-    if(!is.null(x$time) & ctype == 2) {
-      days <- median(diff(as.numeric(x$time)) / 3600 / 24)
-      print(paste("Scaling by # of days =", days))
-      newvar <- newvar * days
-    }
-    
-    newvar
+    deriveOne(x, base, ctype, heatcool, nrow(term$data))
   })
   names(newvars) <- make.names(paste(suffix, suffix2, names(term$weather), base))
   
@@ -93,6 +75,30 @@ deriveVar <- function(term, type, base = 60, cooling = FALSE, weather = NULL) {
   term$data <- cbind(term$data, newvars)
 
   term
+}
+
+
+
+deriveOne <- function(weather, base, type, heatcool, n) {
+  if(is.null(weather$rows)) {
+    stop("Must Link Weather to Data before Starting")
+  }
+  weather <- weather[!is.na(weather$rows), ]
+  newvar <- .Call("deriveVar", 
+                  as.numeric(weather$aveTemp), 
+                  as.integer(weather$rows), 
+                  as.numeric(base), 
+                  as.integer(n), 
+                  as.integer(heatcool),
+                  as.integer(type))
+  
+  # If degree days & we have non-daily weather measurements
+  if(!is.null(weather$time) & type == 2) {
+    days <- median(diff(as.numeric(weather$time)) / 3600 / 24)
+    # print(paste("Scaling by # of days =", days))
+    # newvar <- newvar * days
+  }
+  newvar
 }
 
 
