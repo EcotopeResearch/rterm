@@ -29,7 +29,7 @@ SEXP linkWeatherToData(SEXP dateStart, SEXP dateEnd, SEXP date) {
     
     // For each entry of dateStart/dateEnd
     for(int j = 0; j < n1; j++) {
-      if(dateTmp > dateStartC[j] && dateTmp <= dateEndC[j]) {
+      if(dateTmp >= dateStartC[j] && dateTmp < dateEndC[j]) {
         ansC[i] = j + 1;
         k++;
       }

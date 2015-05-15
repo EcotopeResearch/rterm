@@ -57,7 +57,7 @@ SEXP l1(SEXP temps, SEXP rows, SEXP energy, SEXP lambdax, SEXP type, SEXP interc
   }
   
   //Prep the output
-  SEXP results = PROTECT(allocVector(REALSXP, 5));
+  SEXP results = PROTECT(allocVector(REALSXP, 4 + cIntercept));
   double *coefs = REAL(results);
   
 
@@ -66,7 +66,7 @@ SEXP l1(SEXP temps, SEXP rows, SEXP energy, SEXP lambdax, SEXP type, SEXP interc
 
   // First case, if we never found a valid solution we get zeros. Suppose model
   // then is just the mean
-  if(cp[1] == 0 && cp[3] == 0) {
+  if(cp[cIntercept] == 0 && cp[cIntercept + 2] == 0) {
     mean_energy = vecsum(cEnergy, ndata) / ndata;
     ss_tmp = 0;
     for(int i = 0; i < ndata; i++) {
@@ -74,8 +74,8 @@ SEXP l1(SEXP temps, SEXP rows, SEXP energy, SEXP lambdax, SEXP type, SEXP interc
     }
   } else {
     // Otherwise let's proceed.
-    deriveVarC(cTemp, cp[1], xHeating, cRows, 1, ndata, nweather, cType);
-    deriveVarC(cTemp, cp[3], xCooling, cRows, 2, ndata, nweather, cType);
+    deriveVarC(cTemp, cp[cIntercept], xHeating, cRows, 1, ndata, nweather, cType);
+    deriveVarC(cTemp, cp[cIntercept + 2], xCooling, cRows, 2, ndata, nweather, cType);
     
     // Check if we actually have non-zero xHeating/xCooling to avoid errors
     int heating = 0;
@@ -100,6 +100,7 @@ SEXP l1(SEXP temps, SEXP rows, SEXP energy, SEXP lambdax, SEXP type, SEXP interc
     }   
     
     lmFastCW(X, cEnergy, w, ndata, heating + cooling + cIntercept, betahat);
+
     ss_tmp = ssError(X, cEnergy, ndata, heating + cooling + cIntercept, betahat);
     
   }

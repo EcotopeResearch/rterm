@@ -91,6 +91,7 @@ int findBaseTempC(double *temps, int *rows, double *energy, double *w, int ndata
 
   //Set up the model Matrix X for the regressions
   int p = intercept + nCps;
+
   double *X = malloc(ndata * p * sizeof(double)); 
 
   //Set up a vector betahat for regression coefficients
@@ -196,11 +197,17 @@ double findBestBaseTemp(double *X, double *temps, int *rows, double *energy, dou
       //Else we have heating and cooling, so we need a nested loop
       for(t2 = max(tmin2, t); t2 <= tmax2; t2 = t2 + tstep) {
         deriveVarC(temps, t, cpVarTmp, rows, 1, ndata, nweather, type);
+        if(vecsum(cpVarTmp, ndata) == 0) {
+          continue;
+        }
         for(j = 0; j < ndata; j++) {
           X[intercept * ndata + j] = cpVarTmp[j];
         }
   
         deriveVarC(temps, t, cpVarTmp, rows, 2, ndata, nweather, type);
+        if(vecsum(cpVarTmp, ndata) == 0) {
+          continue;
+        }
         for(j = 0; j < ndata; j++) {
           X[(1 + intercept) * ndata + j] = cpVarTmp[j];
         }
