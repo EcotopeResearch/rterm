@@ -15,6 +15,7 @@ Imports:
   jsonlite,
   dplyr,
   tidyr,
-  lubridate
+  lubridate,
+  ggmap
 Suggests: knitr
 VignetteBuilder: knitr
