@@ -42,6 +42,7 @@ addData <- function(term, data, formula = NULL, interval = NULL, energyVar = NUL
       }
     }))
     
+    # Parse the classes of the variables to decide how to set up the model.
     varClasses <- lapply(term$data, class)
     
     # Case 1.. three variables, assume either start date + end date
@@ -85,7 +86,7 @@ addData <- function(term, data, formula = NULL, interval = NULL, energyVar = NUL
         term$data$dateEnd <- term$data$dateStart %m+% months(1)
       } else if(interval == "daily") {
         names(term$data)[2] <- "dateStart"
-        term$data$dateEnd <- term$data$dateStart + days(1)
+        term$data$dateEnd <- term$data$dateStart + lubridate::days(1)
       } else if(varClasses[2] == "Date") {
         warning("One Date variable found, assuming this is the end date")
         names(term$data)[2] <- "dateEnd"
@@ -300,7 +301,7 @@ addMethod <- function(term, method, name = NULL, ...) {
 
 evaluate <- function(term) {
   
-  term <- linkWeatherToData(term)
+  # term <- linkWeatherToData(term)
   
   methodWeather <- expand.grid(seq_along(term$methods), seq_along(term$weather))
   methodWeather$name <- make.names(paste(names(term$methods)[methodWeather[, 1]],
@@ -317,14 +318,20 @@ evaluate <- function(term) {
 
 evalOne <- function(term, method, weather) {
   
-  # Only use rows for which we have weather... causes segfault otherwise
-  term$data <- term$data[unique(term$weather[[weather]]$rows), ]
+  # Pull out the master data and the current weather, for linking...
+  dset <- term$data
+  weather <- term$weather[[weather]]
+  
+  # Link the requested weather to this data
+  tmp <- linkOneToData(dset, weather)
+  dset <- tmp$dset
+  weather <- tmp$weather
   
   #lowerName <- tolower(names(term$methods)[method])
   if(length(grep("cp", names(term$methods)[method]))) {
-    mod <- cplm(term$data, term$weather[[weather]], term$methods[[method]])
+    mod <- cplm(dset, weather, term$methods[[method]])
   } else if(length(grep("dd", names(term$methods[method])))) {
-    mod <- ddlm(term$data, term$weather[[weather]], term$methods[[method]])
+    mod <- ddlm(dset, weather, term$methods[[method]])
   } else {
     warning(paste("Unrecognized method", names(method), "skipping"))
   }
@@ -431,6 +438,10 @@ xlm.fit <- function(data, weather, heating = TRUE, cooling = FALSE, intercept = 
     y <- as.numeric(data$dailyEnergy)
   } else if(type == 2) {
     y <- as.numeric(data$dailyEnergy)
+  }
+  
+  if(!heating & !cooling) {
+    return(c("baseLoad" = mean(data$dailyEnergy)))
   }
   
   coefs <- .Call("findBaseTemp", 
@@ -656,7 +667,7 @@ print.term <- function(term) {
     coefTable[] <- lapply(coefTable, function(x) if(!sum(!is.na(x))) NULL else x)
     
     R2s <- lapply(term$models, function(x) {
-      ssTot <- sum(x$data$dailyEnergy ^ 2)
+      ssTot <- sum((x$data$dailyEnergy - mean(x$data$dailyEnergy)) ^ 2)
       ssErr <- sum((x$data$dailyEnergy - x$data$fitted) ^ 2)
       1 - ssErr / ssTot
     })
