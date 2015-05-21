@@ -29,6 +29,35 @@ linkWeatherToData <- function(term) {
 }
 
 
+# Weather as an integer
+linkOneToData <- function(dset, weather) {
+  if(is.null(dset) | is.null(weather)) {
+    stop("Cannot link weather to data, at least one has not been initialized")
+  }
+  
+  # Sort dataset on start date for the weather linking
+  dset <- plyr::arrange(dset, dateStart)
+  weather$rows <- .Call("linkWeatherToData", 
+                        as.numeric(dset$dateStart), 
+                        as.numeric(dset$dateEnd),
+                        as.numeric(weather$date))
+  weather$rows[weather$rows <= 0] <- NA
+  weather <- weather[!is.na(weather$rows), ]
+
+  # Check for mismatches between weather and data time spans
+  dset <- dset[unique(weather$rows), ]
+  
+  # Re-link to the possibly reduced data
+  weather$rows <- .Call("linkWeatherToData", 
+                        as.numeric(dset$dateStart), 
+                        as.numeric(dset$dateEnd),
+                        as.numeric(weather$date))  
+  
+
+  list("dset" = dset, "weather" = weather)
+}
+
+
 
 
 deriveVar <- function(term, type, base = 60, cooling = FALSE, weather = NULL) {
