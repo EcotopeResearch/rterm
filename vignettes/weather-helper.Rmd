@@ -28,26 +28,40 @@ noaa_key <- "mgPWFcAfmzIrHjXlacsksLXkhajnyFDp"
 
 If you plan on using rterm, and specifically the functions to get weather data with any regularity, I would recommend putting that line assigning the noaa\_key into a .Rprofile file. These are loaded on startup. You can read more at http://www.statmethods.net/interface/customizing.html and https://stat.ethz.ch/R-manual/R-devel/library/base/html/Startup.html (although as usual the official R documentation is a bit unhelpful unless you are already familiar with the topics). Otherwise you can just set the key interactively in a session using rterm. Note that the package will throw a warning on attachment if it can't find a noaa\_key.
 
-Once you have a noaa_key in your workspace, you are ready to find and download some weather data!
+Once you have a noaa_key in your workspace, you are ready to download some weather data!
 
 
 ## Searching for Weather Stations
 
+
 There are two basic ways to find a weather station appropriate for the building at hand. One is an interactive search at the NOAA website. You can find that here: http://www.ncdc.noaa.gov/cdo-web/search. Search for "Daily Summaries" and "Stations" with the appropriate date range and key word. It will bring up a map where you can click on icons for weather stations and view, among other details, an "ID" that should look something like "GHCND:US1WAKG0179". This is the identifier that you will need to query that station's data within rterm.
 
-The other way to search for stations (and their ID's, which you need to get their data!) is provided within rterm itself. The function stationSearch allows for searches either on name or on latitude/longitude pair. I'm writing this vignette at Ecotope's Seattle, Washington office at 4056 9th Avenue Northeast, which corresponds to latitude/longitude coordinates 47.6569326, -122.3184546, so let's try to find a good weather site to pair with the Ecotope Office billing data.
+The other way to search for stations (and their ID's, which you need to get their data!) is provided within rterm itself. The function stationSearch allows for searches on location name, station name, or latitude/longitude pair. 
 
+To unleash the full convenience of rterm, you can optionally register another API key, this one for Google Maps. [This page](https://developers.google.com/maps/documentation/geocoding/?hl=en_US#api_key) will walk you through the process of registering a Google Maps API key and activating the Geocoding API. As of writing, the free quota allows for 2,500 API requests per day, which should hopefully be plenty! Similarly to the NOAA key, rterm will expect to find an object in your global environment assigned as follows:
+
+```{r}
+google_key <- "your_key_here"
+```
+
+```{r, echo=FALSE}
+google_key <- "AIzaSyBYJbN25Bg_6UbL_FuoyMcv4GaH8nE7Yq4"
+```
+
+In addition, it will help to activate the [Elevation API](https://console.developers.google.com/project/tensile-market-95016/apiui/apiview/elevation_backend/overview) as well. The custom geocoding function in rterm also grabs an elevation, as it is often useful to exclude stations that are say atop a mountain near your building's location.
+
+I'm writing this vignette at Ecotope's Seattle, Washington office at 4056 9th Avenue Northeast so let's try to find a good weather site to pair with the Ecotope Office billing data.
 
 ```{r}
 library(rterm)
-stationSearch("seattle")
+stationSearch(stationName = "seattle")
 ```
 
 Searching for current-ish weather stations with "seattle" in the name returns three results. Sea-Tac airport, Boeing Field, and Sand Point. Note that stationSearch evaluates the name argument as a regular expression, for optional regex shenanigans. Also note that it's looking for "active" weather stations, that have reported data since 2010. This is to weed out the weather stations that were discontinued in say 1920.
 
 We can see that stationSearch returns quite a bit of info! In addition to the name and id of the weather station, we get coordinates, elevation, date range, and data coverage. This comes from an rterm package internal dataset called "stations" that was built with rterm::read.noaa for the NOAA Web Services API. The code for that process can be found in data-raw/weather.R if you're interested.
 
-Alternately, let's try a search by coordinates.
+Alternately, let's try a search by coordinates. Here I have manually looked up the latitude longitude pair for Ecotope's office.
 
 
 ```{r}
@@ -56,10 +70,23 @@ stationSearch(lat = 47.6569326, lon = -122.3184546)
 
 Here we see, by default, the 5 closest weather stations (modify with the nClosest argument). This search picked up Sea-Tac, Boeing Field, and Sand Point, and in addition listed weather stations in Renton and Kent. Helpfully, the last variable reported is the distance in miles from the search coordinates to the weather station. We can see that, here at the Ecotope mothership we're about three and a half miles to [Sand Point](http://en.wikipedia.org/wiki/Sand_Point,_Seattle), which sounds about right because I think it's about a 5 mile bike ride on the popular [Burke Gilman Trail](http://en.wikipedia.org/wiki/Burke-Gilman_Trail). 
 
+Finally, we'll pay off station search with the preferred method, provided that you have registered a Google Maps API key and activated the Geocoding API.
+
+```{r}
+stationSearch("4056 9th Avenue NE, Seattle, WA")
+```
+
 
 ## Exploring weather stations
 
 So we have identified some candidate weather stations that may be appropriate to link to the Ecotope Office Energy use, but how do we choose?
+
+If you searched via Google Maps address, then you can start by pulling up a map of the closest weather stations.
+
+```{r, fig.width=9, fig.height=7}
+stations <- stationSearch("4056 9th Ave NE Seattle, WA", nClosest = 10)
+stationMap(stations, zoom = 9)
+```
 
 One obvious and simple way is to choose the one that's close enough and has the highest data coverage. Data coverage refers the the fraction of data present across the entire date range of the station to the total possible data with records for every day. So for example if temperatures for 10% of days were missing for a station then that would be a data coverage of 0.9. We see that Sea-Tac International Airport has perfect data coverage, so perhaps we could just choose that one and move on.
 
@@ -68,7 +95,7 @@ Not so fast my friend. Sea-Tac is a bit higher in elevation, and there are close
 
 ```{r, fig.width=11,fig.height=8}
 stations <- stationSearch(lat = 47.6569326, lon = -122.3184546)
-comp <- stationCompare(stations, "2014-01-01", "2014-12-31")
+comp <- stationCompare(stations, "2012-01-01", "2012-12-31")
 summary(comp)
 ```
 
@@ -87,6 +114,7 @@ We can also plot the comparison. The default is to plot a 2-week rolling average
 
 ```{r, fig.width=11, fig.height=8}
 plot(comp)
+stationMap(comp, zoom = 9)
 ```
 
 

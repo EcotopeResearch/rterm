@@ -4,10 +4,13 @@
 \alias{stationSearch}
 \title{Search for GHCN Weather Stations}
 \usage{
-stationSearch(name = NULL, lat = NULL, lon = NULL, nClosest = 5,
-  country = NULL, state = NULL)
+stationSearch(geocode = NULL, name = NULL, lat = NULL, lon = NULL,
+  nClosest = 5, country = NULL, state = NULL)
 }
 \arguments{
+\item{geocode}{The default input. A string that will be sent to
+Google Maps to get a latitude/longitude.}
+
 \item{name}{A name to search for in the list of station names.
 Evaluated as a regular expression.}
 
@@ -30,7 +33,10 @@ a data frame with information about the relevant stations found.
 }
 \description{
 Search by station name or latitude/longitude for GHCN weather stations
-that can be loaded with \code{\link{read.ghcn}}.
+that can be loaded with \code{\link{read.ghcn}}. Note that you need to
+acquire a \href{https://developers.google.com/maps/documentation/geocoding/?hl=en_US#api_key}{Google Maps API key} for the default functionality, which is to
+search for stations close to a latitude/longitude as returned by a Google
+Maps geocode.
 }
 \examples{
 # Look for a weather station in Bend, Oregon

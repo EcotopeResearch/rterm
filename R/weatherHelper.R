@@ -115,6 +115,39 @@ read.one.ghcn <- function(stationid, startdate, enddate) {
 }
 
 
+
+read.one.ghcn.monthly <- function(stationid, startdate, enddate) {
+  # Set-up the parameters for the call to NOAA
+  startdate <- as.character(startdate)
+  enddate <- as.character(enddate)
+  param <- paste0("datasetid=GHCNDMS&",
+                  "stationid=", stationid, "&",
+                  "startdate=", startdate, "&",
+                  "enddate=", enddate, "&",
+                  "datatypeid=MNTM&",
+                  "limit=1000")
+  
+  # Query the NOAA API for the data
+  dset <- read.noaa("data", param)
+  if(is.null(dset)) {
+    warning(paste("No data found from NOAA w/ param", param))
+    return(NULL)
+  }
+  
+  # Clean it up and return
+  dset <- dset %>%
+    dplyr::mutate(date = as.Date(date)) %>%
+    dplyr::mutate(value = C_to_F(value / 10)) %>%
+    dplyr::select(date, value, datatype) %>%
+    tidyr::spread(datatype, value)
+  
+  names(dset)[names(dset) == "MNTM"] <- "aveTemp"
+  
+  dset
+  
+}
+
+
 # startdate <- "2010-01-01"
 # enddate <- "2014-01-01"
 
@@ -198,6 +231,47 @@ read.ghcn <- function(stationid, startdate, enddate) {
 
 
 
+read.ghcn.monthly <- function(stationid, startdate, enddate) {
+  stDate <- try(as.Date(startdate))
+  if(inherits(stDate, "try-error")) {
+    stop(paste("Could not parse start date", startdate))
+  }
+  
+  edDate <- try(as.Date(enddate))
+  if(inherits(edDate, "try-error")) {
+    stop(paste("Could not parse end date", enddate))
+  }
+  
+  monthsToGet <- lubridate::interval(stDate, edDate) %/% months(1)
+  
+  # We can download 100 months at a time
+  nCalls <- ceiling(monthsToGet / 100)
+  dsets <- lapply(1:nCalls, function(i) {
+    stTmp <- stDate + (i - 1) * months(101)
+    edTmp <- min(edDate, stDate + i * months(100))
+    read.one.ghcn.monthly(stationid, stTmp, edTmp)
+  })  
+  
+  dset <- do.call('rbind', dsets)
+  
+  if(is.null(dset)) return(NULL)
+  
+  # Fill in NA values...
+  allDates <- stDate + months(0:monthsToGet)
+  isMissing <- setdiff(allDates, dset$date)
+  if(length(isMissing)) {
+    isMissing <- as.Date(isMissing, origin = "1970-01-01")
+    dset <- rbind(dset,
+                  data.frame("date" = isMissing, "aveTemp" = NA))
+  }
+  
+  dset <- plyr::arrange(dset, date)
+  
+  return(dset)
+}
+
+
+
 calcDistance <- function(lat1, lon1, lat2, lon2) {
   if(lat1 == lat2 & lon1 == lon2) {
     return(0)
@@ -215,10 +289,15 @@ calcDistance <- function(lat1, lon1, lat2, lon2) {
 
 #' Search for GHCN Weather Stations
 #' 
-#' Search by station name or latitude/longitude for GHCN weather stations
-#' that can be loaded with \code{\link{read.ghcn}}. 
+#' Search by location name, station name or latitude/longitude for GHCN weather stations
+#' that can be loaded with \code{\link{read.ghcn}}. Note that you need to 
+#' acquire a \href{https://developers.google.com/maps/documentation/geocoding/?hl=en_US#api_key}{Google Maps API key} for the default functionality, which is to 
+#' search for stations close to a latitude/longitude as returned by a Google
+#' Maps geocode.
 #' 
-#' 
+#' @param geocode The default input. A string that will be sent to 
+#'   Google Maps to get a latitude/longitude. This must be loaded into
+#'   your R session as "google_key"
 #' @param name A name to search for in the list of station names. 
 #'  Evaluated as a regular expression.
 #' @param lat Latitude
@@ -252,7 +331,7 @@ calcDistance <- function(lat1, lon1, lat2, lon2) {
 #' stationSearch(country = "Switzerland")
 #' 
 #' 
-stationSearch <- function(name = NULL, lat = NULL, lon = NULL, nClosest = 5, country = NULL, state = NULL) {
+stationSearch <- function(geocode = NULL, stationName = NULL, lat = NULL, lon = NULL, nClosest = 5, country = NULL, state = NULL) {
   # Check for a country and/or state
   if(!is.null(country)) {
     stations <- stations[grep(country, stations$country, ignore.case = TRUE), ]
@@ -268,9 +347,22 @@ stationSearch <- function(name = NULL, lat = NULL, lon = NULL, nClosest = 5, cou
   
   stations$milesDistant <- NA
   
-  # Now search by either name or lat/lon
-  if(!is.null(name)) {
-    ind <- grep(name, stations$name, ignore.case = TRUE)
+  # Check if we need to geocode
+  elev <- NULL
+  if(!is.null(geocode)) {
+    locs <- geocode(geocode)
+    if(is.null(locs)) {
+      return(NULL)
+    }
+    lat <- as.numeric(locs[1])
+    lon <- as.numeric(locs[2])
+    elev <- as.numeric(locs[3])
+  }
+
+  
+  # Now search by either stationName or lat/lon
+  if(!is.null(stationName)) {
+    ind <- grep(stationName, stations$name, ignore.case = TRUE)
     if(!length(ind)) {
       return(NULL)
     }
@@ -280,13 +372,20 @@ stationSearch <- function(name = NULL, lat = NULL, lon = NULL, nClosest = 5, cou
     })
     stations <- plyr::arrange(stations, milesDistant)
     ind <- seq(from = 1, to = min(nrow(stations), nClosest), by = 1)
+    
+    # Assign lat and lon of search center to stations
   } else {
     ind <- 1:nrow(stations)
   }
 
   stations <- subset(stations, select = -c(country, state))
   
-  stations[ind, ]
+  attr(stations, "lat") <- lat
+  attr(stations, "lon") <- lon
+  attr(stations, "elev") <- elev
+  attr(stations, "gmapsSearch") <- geocode
+  
+  stations <- stations[ind, ]
 }
 
 smoothTemps <- function(dset, days = 14, var = "aveTemp") {
@@ -344,7 +443,30 @@ smoothTemps <- function(dset, days = 14, var = "aveTemp") {
 stationCompare <- function(st, startdate, enddate) {
   ids <- stations$id
   dsets <- lapply(1:nrow(st), function(i) {
-    dset <- read.ghcn(st$id[i], startdate, enddate)
+    dset <- try(read.ghcn(st$id[i], startdate, enddate))
+    if(inherits(dset, "try-error")) {
+      return(NULL)
+    }
+    if(!is.null(dset)) {
+      dset <- merge(dset, st[i, ])
+    }
+    dset
+  })
+  
+  dset <- do.call("rbind", dsets)
+  stationComp <- list("data" = dset, "stations" = st)
+  class(stationComp) <- "stationComp"
+  stationComp
+}
+
+
+stationCompareMonthly <- function(st, startdate, enddate) {
+  ids <- stations$id
+  dsets <- lapply(1:nrow(st), function(i) {
+    dset <- try(read.ghcn.monthly(st$id[i], startdate, enddate))
+    if(inherits(dset, "try-error")) {
+      return(NULL)
+    }
     if(!is.null(dset)) {
       dset <- merge(dset, st[i, ])
     }
@@ -387,15 +509,16 @@ stationCompare <- function(st, startdate, enddate) {
 #' summary(comp)
 #' 
 #' 
-summary.stationComp <- function(sc) {
+summary.stationComp <- function(sc, days = 14) {
   # We want to report the following...
   #  1) Observed Data Fraction
   #  2) Degrees above or below average between selected stations
   
-  dset <- smoothTemps(sc$data)
+  dset <- smoothTemps(sc$data, days)
   sumStats <- do.call('rbind', by(dset, dset$id, function(x) {
     data.frame("dataFrac" = sum(!is.na(x$aveTemp)) / nrow(x),
       "relativeTemp" = mean(x$scaledTempRaw, na.rm = TRUE),
+      "aveTemp" = mean(x$aveTemp, na.rm = TRUE),
       "id" = x$id[1])
   }))
   
@@ -413,7 +536,7 @@ summary.stationComp <- function(sc) {
   }
 
   results <- plyr::arrange(results, -useIndex)
-  results <- results[, names(results) %in% c("id", "name", "milesDistant", "dataFrac", "relativeTemp")]
+  results <- results[, names(results) %in% c("id", "name", "milesDistant", "dataFrac", "relativeTemp", "aveTemp")]
   results
 }
 
@@ -453,7 +576,7 @@ summary.stationComp <- function(sc) {
 #' plot(comp, var = "tmin", type = "actual")
 #' 
 #' 
-plot.stationComp <- function(sc, days = 14, var = "aveTemp", type = "relative", xvar = "date") {
+plot.stationComp <- function(sc, days = 14, var = "aveTemp", type = "actual", xvar = "date") {
   
   dset <- smoothTemps(sc$data, days, var)
   
@@ -505,6 +628,21 @@ plot.stationComp <- function(sc, days = 14, var = "aveTemp", type = "relative", 
 }
 
 
+removeStation <- function(comp, name) {
+  tmp <- grep(name, comp$stations$name, ignore.case = TRUE)
+  if(length(tmp) > 0) {
+    badName <- comp$stations$name[tmp]
+    for(name in badName) {
+      comp$stations <- comp$stations[-tmp, ]  
+      comp$data <- comp$data[comp$data$name != name, ]
+    }
+  } else {
+    stop(paste("Could not find station", name))
+  }
+  
+  comp
+}
+
 
 # Bonus function to compare weather at a given site for x years...
 #' Look at a time trend within a station, for example the past 5 years
@@ -544,7 +682,7 @@ stationTrend <- function(weather, var = "aveTemp", days = 60, type = "relative")
   
   # Add a relative temperature variable
   weather <- do.call("rbind", by(weather, weather$day, function(x) {
-    x$relTemp <- scale(x[var], center = TRUE, scale = FALSE)
+    x$relTemp <- as.numeric(scale(x[, var], center = TRUE, scale = FALSE))
     x
   }))
   weather <- arrange(weather, date)
@@ -573,3 +711,158 @@ stationTrend <- function(weather, var = "aveTemp", days = 60, type = "relative")
 
 
 
+geocode <- function(name, quietly = TRUE) {
+  if(!exists("google_key")) {
+    stop("Must Register a Google Maps API Key to Search by City/Address")
+  }
+  name <- enc2utf8(gsub(" ", "%20", name))
+  urlx <- paste("https://maps.google.com/maps/api/geocode/json?address=", 
+                      name, "&key=", google_key, sep = "")
+
+  if(!quietly) print(paste("Attempting to query:", urlx))
+  tmp <- httr::GET(urlx)
+  results <- jsonlite::fromJSON(httr::content(tmp, "text"))$results
+  
+  if(nrow(results) != 1) {
+    warning(paste("Ambiguous City/Address", name))
+    return(NULL)
+  }
+  
+  code <- as.numeric(results$geometry$location)
+  names(code) <- c("lat", "lon")
+  
+  urly <- paste("https://maps.googleapis.com/maps/api/elevation/json?locations=", 
+                code['lat'], ",", code['lon'], "&key=", google_key, sep = "")
+  tmp <- httr::GET(urly)
+  results <- jsonlite::fromJSON(httr::content(tmp, "text"))$results
+  code <- c(code, "elevation" = as.numeric(results['elevation']))
+  
+  Sys.sleep(.15)
+  code
+}
+
+
+getElevation <- function(name, quietly = TRUE) {
+  if(!exists("google_key")) {
+    stop("Must Register a Google Maps API Key to Search by City/Address")
+  }
+  name <- enc2utf8(gsub(" ", "%20", name))
+  # urlx <- paste("https://maps.google.com/maps/api/elevation/json?sensor=false&address=", 
+  #              name, "&key=", google_key, sep = "")
+  
+  urlx <- paste("https://maps.googleapis.com/maps/api/elevation/json?address=", 
+                name, sep = "")
+  
+  if(!quietly) print(paste("Attempting to query:", urlx))
+  tmp <- httr::GET(urlx)
+  results <- jsonlite::fromJSON(httr::content(tmp, "text"))$results
+  
+  if(nrow(results) != 1) {
+    warning(paste("Ambiguous City/Address", name))
+    return(NULL)
+  }
+  
+  geocode <- as.numeric(results$geometry$location)
+  names(geocode) <- c("lat", "lon")
+  
+  Sys.sleep(.15)
+  geocode
+}
+
+
+
+assignStations <- function(dset, varname, quietly = TRUE) {
+  locs <- unique(dset[, varname])
+  stationInfo <- do.call('rbind', lapply(locs, function(x) {
+    if(!quietly) {
+      print(paste("Assigning Station for", x))
+    }
+    stations <- stationSearch(x, nClosest = 1)
+    if(is.null(stations)) return(NULL)
+    names(stations)[names(stations) == "id"] <- "stationid"
+    stations[varname] <- x
+    stations
+  }))
+
+  merge(dset, 
+        stationInfo[, c(varname, "stationid", "name", "datacoverage", "elevation", "milesDistant")], 
+        by = varname, all.x = TRUE)
+  
+}
+
+
+
+# -------------Mapping utilities
+
+stationMap <- function(x, ...) {
+  UseMethod("stationMap")
+}
+
+# Map just the station locations
+stationMap.data.frame <- function(stations, zoom = 10) {
+
+  location = c("lon" = attributes(stations)$lon,
+               "lat" = attributes(stations)$lat)
+  
+  df <- subset(stations, select = c(name, longitude, latitude))
+  df <- rbind(df, data.frame("name" = "Search Location", 
+                             "longitude" = location[1], 
+                             "latitude" = location[2]))
+  
+  
+  mapTmp <- ggmap::get_map(location, maptype = "terrain", color = "bw", zoom = zoom)
+  ggmap::ggmap(mapTmp) + 
+    ggplot2::geom_point(data = df[-nrow(df), ], ggplot2::aes(longitude, latitude, col = name), size = 6) +
+    ggplot2::geom_point(data = df[nrow(df), ], ggplot2::aes(longitude, latitude, col = name), shape = 17, size = 4) +
+    ggplot2::scale_colour_discrete(name = "Weather Station") +
+    ggplot2::ggtitle(paste(" NOAA GHCN Weather Stations Near", attributes(stations)$gmapsSearch)) +
+    ggplot2::xlab("Longitude") + ggplot2::ylab("Latitude")
+
+}
+
+
+
+stationMap.stationComp <- function(comp, zoom = 10, type = "relative", art = FALSE) {
+  
+  location = c("lon" = attributes(comp$stations)$lon,
+               "lat" = attributes(comp$stations)$lat)
+  
+  dfl <- data.frame("lon" = attributes(comp$stations)$lon,
+           "lat" = attributes(comp$stations)$lat)
+  
+  df <- merge(summary(comp, days = 1),
+              comp$stations[, c("id", "longitude", "latitude", "elevation")])
+  df$elevation <- df$elevation * 3.28
+  
+  df$lat2 <- df$latitude + .015
+  
+  if(type == "relative") {
+    legLabel <- "Relative Temp(F)"
+    vname <- "relativeTemp"
+  } else if(type == "actual") {
+    legLabel <- "Average Temp (F)"
+    vname <- "aveTemp"
+  } else {
+    stop(paste("Unrecognized plot type", type))
+  }
+  
+  
+  mapTmp <- ggmap::get_map(location, maptype = "terrain", color = "bw", zoom = zoom)
+  p <- ggmap::ggmap(mapTmp) + 
+    ggplot2::geom_point(data = dfl, ggplot2::aes(lon, lat), col = "black", size = 4, shape = 2) +
+    scale_colour_continuous(low = "blue", high = "red", name = legLabel) +
+    ggplot2::ggtitle(paste("NOAA GHCN Weather Stations Near", attributes(comp$stations)$gmapsSearch, "\n",
+                           min(comp$data$date), "to", max(comp$data$date))) +
+    ggplot2::xlab("Longitude") + ggplot2::ylab("Latitude")
+  
+  if(art) {
+    p <- p + ggplot2::geom_point(data = df, ggplot2::aes_string(x = "longitude", y = "lat2", col = vname, size = "elevation")) +
+      scale_size_continuous(name = "Elevation", range = c(2.5, 5))
+  } else {
+    p <- p + ggplot2::geom_text(data = df, ggplot2::aes_string(x = "longitude", y = "lat2", col = vname, label = "name", size = "dataFrac")) +
+      ggplot2::geom_point(data = df, ggplot2::aes_string(x = "longitude", y = "latitude", col = vname), size = 4, shape = 2) +
+      scale_size_continuous(name = "Data Fraction", range = c(2, 4))
+  }
+  
+  p  
+}
