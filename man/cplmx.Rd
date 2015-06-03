@@ -43,6 +43,6 @@ data(dhp)
 results <- cplmx(kwhd ~ avetemp, data = dhp,
                    id_vars = c("id", "post"))
 summary(results)
-plot(results, "heatingChangePoint")
+plot(results, "heatingBase")
 }
 

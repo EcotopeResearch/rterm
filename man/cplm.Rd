@@ -4,13 +4,12 @@
 \alias{cplm}
 \title{Fit a change point linear model}
 \usage{
-cplm(formula, data, weights, heating = NULL, cooling = NULL, se = TRUE,
-  nreps = 200, parametric = NULL, lambda = 0)
+cplm(data, weather, controls)
 }
 \arguments{
-\item{formula}{a formula as would be used in a linear model}
-
 \item{data}{the dataset to perform the regression with}
+
+\item{formula}{a formula as would be used in a linear model}
 
 \item{weights}{an optional vector of observation weights, if non-NULL will use these for weighted least squares}
 
