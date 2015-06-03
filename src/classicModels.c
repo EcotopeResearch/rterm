@@ -60,15 +60,15 @@ with the optimum.*/
 int findBaseTempC(double *temps, int *rows, double *energy, double *w, int ndata, int nweather, double *cp, int heating, int cooling, int type, int intercept) {
   double ssBest, ssTmp, tmin1, tmin2, tmax1, tmax2;
   int i, heatcool;
-  double tstepLarge = 1;
-  double tstepSmall = 0.1;
-  double tstep2 = 1;
+  double tstepLarge = 2;
+  double tstepSmall = 0.2;
+  double tstep2 = 2;
   
   //Control for how many change points we're dealing with...
   //also set the the tmin and tmax ranges for change point search
   tmin1 = 30;
   tmax1 = 80;
-  tmin2 = 55;
+  tmin2 = 50;
   tmax2 = 90;
   int nCps = heating + cooling;
   if(nCps == 1) {
@@ -76,7 +76,7 @@ int findBaseTempC(double *temps, int *rows, double *energy, double *w, int ndata
       heatcool = 1; 
     } else {
       heatcool = 2;
-      tmin1 = 55;
+      tmin1 = 50;
       tmax1 = 90;
     }
   } else {
