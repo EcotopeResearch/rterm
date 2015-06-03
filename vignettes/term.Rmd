@@ -11,6 +11,11 @@ vignette: >
 
 ## Constructing a term
 
+```{r, echo=FALSE}
+noaa_key <- "mgPWFcAfmzIrHjXlacsksLXkhajnyFDp"
+google_key <- "AIzaSyBYJbN25Bg_6UbL_FuoyMcv4GaH8nE7Yq4"
+```
+
 Everything goes through a "term" S3 class. It may seem a bit complicated up front, but mastering the "term" methods makes this all much easier. We'll walk through an example for the Ecotope office bills, step-by-step, then put it all together at the end.
 
 ### Initialize

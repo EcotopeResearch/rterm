@@ -52,6 +52,10 @@ getGeoCode <- function(name, quietly = TRUE) {
 
 We have also plugged rterm into the [R ggmap package](http://cran.r-project.org/web/packages/ggmap/index.html) from David Kahle and Hadley Wickham. 
 
+```{r, echo=FALSE}
+noaa_key <- "mgPWFcAfmzIrHjXlacsksLXkhajnyFDp"
+google_key <- "AIzaSyBYJbN25Bg_6UbL_FuoyMcv4GaH8nE7Yq4"
+```
 
 ```{r}
 library(rterm)
