@@ -1,6 +1,6 @@
 
 
-newTerm <- function(name = NULL) {
+newTerm <- function(name = NULL, address = NULL) {
   term <- list()
   term$data <- NULL
   term$weather <- list()
@@ -9,6 +9,9 @@ newTerm <- function(name = NULL) {
   class(term) <- "term"
   if(!is.null(name)) {
     attr(term, "name") <- name
+  }
+  if(!is.null(address)) {
+    attr(term, "address") <- address
   }
   return(term)
 }
@@ -82,7 +85,7 @@ addData <- function(term, data, formula = NULL, interval = NULL, energyVar = NUL
         stop("Right Hand Side must be either a Date or Time class")
       }
       if(interval == "monthly") {
-        term$data$dateStart <- lubridate::floor_date(term$data[, 2])
+        term$data$dateStart <- lubridate::floor_date(term$data[, 2], "month")
         term$data$dateEnd <- term$data$dateStart %m+% months(1)
       } else if(interval == "daily") {
         names(term$data)[2] <- "dateStart"
@@ -157,6 +160,15 @@ addWeather <- function(term, weather = NULL, formula = NULL, stationid = NULL, t
     stop(paste("Weather named", name, "already added to TERM"))
   }
   
+  # If there are no inputs & an address was specified blindly take the first
+  if(is.null(stationid) & is.null(weather) & !is.null(attr(term, "address"))) {
+    address <- attr(term, "address")
+    stations <- stationSearch(address)
+    print("Using closest weather station to specified address")
+    print(stations[1, ])
+    stationid <- stations$id[1]
+  }
+  
   # Check if a stationid was entered for read.ghcn
   if(!is.null(stationid)) {
     if(!is.null(term$data)) {
@@ -202,6 +214,8 @@ addWeather <- function(term, weather = NULL, formula = NULL, stationid = NULL, t
       stop(paste("When providing your own weather, must specify timeVar and tempVar",
            "See help(addWeather)"))
     }
+  } else {
+    stop("Must enter either a stationid, a weather dataset, or associate an address w/ the TERM")
   }
   
   # Interpolate missing values, if necessary
@@ -256,10 +270,10 @@ addMethod <- function(term, method, name = NULL, ...) {
   # I need default options... store them here
   if(tolower(method) %in% c("change-point", "changepoint", "cp")) {
     method <- "cp"
-    defaults <- list(heating = NULL, cooling = NULL, intercept = TRUE, se = TRUE, nreps = 200, parametric = NULL, lambda = 12)
+    defaults <- list(heating = NULL, cooling = NULL, intercept = TRUE, se = TRUE, nreps = 200, parametric = FALSE, lambda = 12)
   } else if(tolower(method) %in% c("degree-day", "degreeday", "dd")) {
     method <- "dd"
-    defaults <- list(heating = NULL, cooling = NULL, intercept = TRUE, se = TRUE, nreps = 200, parametric = NULL, lambda = 8) 
+    defaults <- list(heating = NULL, cooling = NULL, intercept = TRUE, se = TRUE, nreps = 200, parametric = FALSE, lambda = 8) 
   } else {
     stop(paste("Unrecognized Method", method))
   }
@@ -340,389 +354,14 @@ evalOne <- function(term, method, weather) {
 }
 
 
-ddlm <- function(data, weather, controls) {
-  coefs <- ddlm.fit(data, weather, controls$heating, controls$cooling, controls$intercept, controls$lambda)
-  
-  mod <- list()
-  mod$LS <- coefs$LS
-  mod$L1 <- coefs$L1
-  mod$data <- data
-  
-  # Choose the model fit to use... will have to add logic
-  attr(mod, "fit") <- "LS"
-  
-  # Create derived variables
-  if(attr(mod, "fit") == "LS") {
-    coefs <- mod$LS
-  } else {
-    coefs <- mod$L1
+extractModel <- function(term, name) {
+  models <- names(term$models)
+  toSelect <- grep(name, models)
+  if(length(toSelect) > 1) {
+    stop(paste("Ambiguous Model name", name))
+  } else if(length(toSelect) == 0) {
+    stop(paste("Model", name, "not found"))
   }
-  
-  if(!is.na(coefs['heatingBase'])) {
-    mod$data$xHeating <- deriveOne(weather, coefs['heatingBase'], type = 2L, heatcool = 1L, n = nrow(data))
-  }
-  if(!is.na(coefs['coolingBase'])) {
-    mod$data$xCooling <- deriveOne(weather, coefs['coolingBase'], type = 2L, heatcool = 2L, n = nrow(data))
-  }
-  mod$data$temp <- deriveOne(weather, coefs['coolingBase'], type = 3L, heatcool = 1L, n = nrow(data))
-
-  class(mod) <- c("ddlm", "cplm", "xlm")
-
-  mod$data$fitted <- fitted(mod)
-  
-  return(mod)
+  term$models[[toSelect]]
 }
-
-fitted.xlm <- function(mod, fit = NULL) {
-  
-  #Check if we're using the LS or L1 fitted coefficients
-  if(is.null(fit)) {
-    fit <- attr(mod, "fit")
-  }
-  
-  coefs <- coef(mod, fit, silent = TRUE)
-  
-  if(!is.na(coefs['baseLoad'])) {
-    toReturn <- rep(coefs['baseLoad'], nrow(mod$data))
-  } else {
-    toReturn <- rep(0, nrow(mod$data))
-  }
-  
-  if(!is.null(mod$data$xHeating)) {
-    toReturn <- toReturn + coefs['heatingSlope'] * mod$data$xHeating
-  }
-  if(!is.null(mod$data$xCooling)) {
-    toReturn <- toReturn + coefs['coolingSlope'] * mod$data$xCooling
-  }
-  
-  return(as.numeric(toReturn))
-}
-
-cplm <- function(data, weather, controls) {
-  coefs <- cplm.fit(data, weather, controls$heating, controls$cooling, controls$intercept, controls$lambda)
-
-  mod <- list()
-  mod$LS <- coefs$LS
-  mod$L1 <- coefs$L1
-  mod$data <- data
-  
-  # Choose the model fit to use... will have to add logic
-  attr(mod, "fit") <- "LS"
-  
-  # Create derived variables
-  if(attr(mod, "fit") == "LS") {
-    coefs <- mod$LS
-  } else {
-    coefs <- mod$L1
-  }
-  
-  if(!is.na(coefs['heatingBase'])) {
-    mod$data$xHeating <- deriveOne(weather, coefs['heatingBase'], type = 1L, heatcool = 1L, n = nrow(data))
-  }
-  if(!is.na(coefs['coolingBase'])) {
-    mod$data$xCooling <- deriveOne(weather, coefs['coolingBase'], type = 1L, heatcool = 2L, n = nrow(data))
-  }
-  mod$data$temp <- deriveOne(weather, coefs['coolingBase'], type = 3L, heatcool = 1L, n = nrow(data))
-  
-  class(mod) <- c("cplm", "xlm")
-  mod$data$fitted <- fitted(mod)
-  
-  return(mod)
-  
-}
-
-
-xlm.fit <- function(data, weather, heating = TRUE, cooling = FALSE, intercept = TRUE, type = 1L) {
-  
-  if(type == 1) {
-    y <- as.numeric(data$dailyEnergy)
-  } else if(type == 2) {
-    y <- as.numeric(data$dailyEnergy)
-  }
-  
-  if(!heating & !cooling) {
-    return(c("baseLoad" = mean(data$dailyEnergy)))
-  }
-  
-  coefs <- .Call("findBaseTemp", 
-                 as.numeric(weather$aveTemp),
-                 as.integer(weather$rows), 
-                 y,
-                 rep(1, nrow(data)),
-                 as.integer(heating), as.integer(cooling), 
-                 as.integer(type), as.integer(intercept))
-  
-  # Now we need to name them
-  if(intercept) {
-    if(heating & cooling) {
-      names(coefs) <- c("baseLoad", "heatingBase", "heatingSlope", "coolingBase", "coolingSlope")
-    } else if(heating) {
-      names(coefs) <- c("baseLoad", "heatingBase", "heatingSlope")
-    } else if(cooling) {
-      names(coefs) <- c("baseLoad", "coolingBase", "coolingSlope")
-    } else {
-      names(coefs) <- c("baseLoad")
-    }
-  } else {
-    if(heating & cooling) {
-      names(coefs) <- c("heatingBase", "heatingSlope", "coolingBase", "coolingSlope")
-    } else if(heating) {
-      names(coefs) <- c("heatingBase", "heatingSlope")
-    } else if(cooling) {
-      names(coefs) <- c("coolingBase", "coolingSlope")
-    } else {
-      warning("No base load, heating, or cooling results in no model")
-    }
-  }
-  
-  return(coefs)
-}
-
-
-cplm.fit <- function(data, weather, heating = NULL, cooling = NULL, intercept = TRUE, lambda = 0) {
-  if(is.null(weather$rows)) {
-    stop("Must link data to weather before model fitting")
-  }
-  
-  l1Results <- .Call("l1", as.numeric(weather$aveTemp),
-                as.integer(weather$rows),
-                as.numeric(data$dailyEnergy),
-                lambda, 1L, as.integer(intercept))
-
-  if(intercept) {
-    names(l1Results) <- c("baseLoad", "heatingBase", "heatingSlope", 
-                          "coolingBase",  "coolingSlope")    
-  } else {
-    names(l1Results) <- c("heatingBase", "heatingSlope", 
-                          "coolingBase",  "coolingSlope")    
-  }
-
-  
-  if(is.null(heating)) {
-    heating <- as.numeric(l1Results['heatingSlope']) > 0
-  }
-  if(is.null(cooling)) {
-    cooling <- as.numeric(l1Results['coolingSlope']) > 0
-  }
-
-  lsResults <- c("baseLoad" = NA, "heatingBase" = NA,
-                 "heatingSlope" = NA, "coolingBase" = NA,
-                 "coolingSlope" = NA)
-  if(!heating & !cooling & !intercept) {
-    
-  } else if(!heating & !cooling) {
-    lsResults['baseLoad'] <- mean(data$energy)
-  }
-  
-  lsCoefs <- xlm.fit(data, weather, heating, cooling, intercept, 1L)
-
-  for(coef in names(lsResults)) {
-    if(!is.null(lsCoefs[coef])) {
-      lsResults[coef] <- lsCoefs[coef]
-    }
-  }
-  
-  # Add logic to check whether we conclusively found a change point
-  
-  return(list("LS" = lsResults, "L1" = l1Results))
-}
-
-
-
-ddlm.fit <- function(data, weather, heating = NULL, cooling = NULL, intercept = TRUE, lambda = 7) {
-  if(is.null(weather$rows)) {
-    stop("Must link data to weather before model fitting")
-  }
-  
-  l1Results <- .Call("l1", as.numeric(weather$aveTemp),
-                  as.integer(weather$rows),
-                  as.numeric(data$dailyEnergy),
-                  lambda, 2L, as.integer(intercept))
-
-  if(intercept) {
-    names(l1Results) <- c("baseLoad", "heatingBase", "heatingSlope", 
-                          "coolingBase",  "coolingSlope")    
-  } else {
-    names(l1Results) <- c("heatingBase", "heatingSlope", 
-                          "coolingBase",  "coolingSlope")    
-  }
-  
-  if(is.null(heating)) {
-    heating <- as.numeric(l1Results['heatingSlope']) > 0
-  }
-  if(is.null(cooling)) {
-    cooling <- as.numeric(l1Results['coolingSlope']) > 0
-  }
-  
-  
-  lsCoefs <- xlm.fit(data, weather, heating, cooling, intercept, 2L)
-  
-  # In the case of degree day, we need to refit the model in R 
-  # accounting for different time intervals in the weather data...
-  if(!is.null(weather$time) & 0) {
-    days <- median(diff(as.numeric(weather$time)) / 3600 / 24)
-    # print(paste("Scaling by # of days =", days))
-    if(heating) {
-      data$xheating <- .Call("deriveVar", 
-                             as.numeric(weather$aveTemp), 
-                             as.integer(weather$rows), 
-                             as.numeric(coefs['heatingBase']), 
-                             as.integer(nrow(data)), 
-                             1L, 2L) * days
-    }
-    
-    if(cooling) {
-      data$xcooling <- .Call("deriveVar", 
-                             as.numeric(weather$aveTemp), 
-                             as.integer(weather$rows), 
-                             as.numeric(coefs['coolingBase']), 
-                             as.integer(nrow(data)), 
-                             2L, 2L) * days
-    }
-    
-    # Select the appropriate formula
-    if(intercept & heating & cooling) {
-      form <- formula(dailyEnergy ~ xheating + xcooling)
-    } else if(!intercept & heating & cooling) {
-      form <- formula(dailyEnergy ~ 0 + xheating + xcooling)
-    } else if(intercept & heating & !cooling) {
-      form <- formula(dailyEnergy ~ xheating)
-    } else if(!intercept & heating & !cooling) {
-      form <- formula(dailyEnergy ~ 0 + xheating)
-    } else if(intercept & !heating & cooling) {
-      form <- formula(dailyEnergy ~ xcooling)
-    } else if(!intercept & !heating & cooling) {
-      form <- formula(dailyEnergy ~ 0 + xcooling)
-    }
-    
-    mod <- lm(form, data)
-    if(heating) {
-      lsCoefs['heatingSlope'] <- as.numeric(coef(mod)['xheating'])
-    }
-    if(cooling) {
-      lsCoefs['coolingSlope'] <- as.numeric(coef(mod)['xcooling'])
-    }
-  }
-
-  lsResults <- c("baseLoad" = NA, "heatingBase" = NA,
-                 "heatingSlope" = NA, "coolingBase" = NA,
-                 "coolingSlope" = NA)
-  if(!heating & !cooling & !intercept) {
-    
-  } else if(!heating & !cooling) {
-    lsResults['baseLoad'] <- mean(data$energy)
-  }
-  
-  for(coef in names(lsResults)) {
-    if(!is.null(lsCoefs[coef])) {
-      lsResults[coef] <- lsCoefs[coef]
-    }
-  }
-
-  
-  return(list("LS" = lsResults, "L1" = l1Results))
-}
-
-
-
-
-print.term <- function(term) {
-
-  if(!is.null(attr(term, "name", exact = TRUE))) {
-    print(attr(term, "name", exact = TRUE))
-  }
-
-  if(!is.null(term$data)) {
-    print(paste("Data:", 
-                nrow(term$data),
-                "observations from", min(term$data$dateStart),
-                "to", max(term$data$dateEnd)))
-  } else {
-    print("No Data Associated")
-  }
-  
-  nweather <- length(term$weather)
-  if(!nweather) {
-    print("No Weather Associated")
-  } else {
-    print(paste(nweather, "Weather Files:",
-                paste(names(term$weather), collapse = ", ")))
-  }
-  
-  nmethods <- length(term$methods)
-  if(!nmethods) {
-    print("No Methods Associated")
-  } else {
-    print(paste(nmethods, "Methods:",
-                paste(names(term$methods), collapse = ", ")))
-  }
-  
-  nmodels <- length(term$models)
-  if(!nmodels) {
-    print("No Models Evaluated")
-  } else {
-    print("Evaluated Models:")
-    coefTable <- do.call("rbind", lapply(term$models, function(x) x$LS))
-    coefTable <- data.frame(coefTable)
-    coefTable[] <- lapply(coefTable, function(x) if(!sum(!is.na(x))) NULL else x)
-    
-    R2s <- lapply(term$models, function(x) {
-      ssTot <- sum((x$data$dailyEnergy - mean(x$data$dailyEnergy)) ^ 2)
-      ssErr <- sum((x$data$dailyEnergy - x$data$fitted) ^ 2)
-      1 - ssErr / ssTot
-    })
-    coefTable <- cbind(coefTable, "R2" = unlist(R2s))
-    
-    print(coefTable)
-  }
-}
-
-
-plot.term <- function(term, xvar = NULL) {
-  nmodels <- length(term$models)
-  if(!nmodels) {
-    stop("No Models Evaluated, cannot plot")
-  }
-
-  # Need to get fitted values...
-
-  abc <- do.call('rbind', lapply(seq_along(term$models), function(i) {
-    x <- term$models[[i]]
-    tmp <- subset(x$data, select = c(dateStart, dailyEnergy, temp, fitted))
-    tmp$type <- names(term$models)[i]
-    tmp
-  }))
-  
-  meanTemps <- ddply(abc, .(dateStart), function(x) {
-    c("temp" = mean(x$temp),
-      "dailyEnergy" = mean(x$dailyEnergy))
-  })
-  
-  
-  if(is.null(xvar)) {
-    xvar <- "temp"
-  }
-  
-  if(xvar == "temp") {
-    ggplot2::ggplot(abc) + ggplot2::theme_bw() + 
-      ggplot2::geom_point(data = meanTemps, ggplot2::aes(x = temp, y = dailyEnergy)) + 
-      ggplot2::geom_line(ggplot2::aes(x = temp, y = fitted, col = type)) + 
-      ggplot2::ggtitle(paste(attr(term, "name", exact = TRUE), "Energy versus Temperature")) + 
-      ggplot2::xlab("Average Temperature (F)") +
-      ggplot2::ylab("Daily Energy (kWh)")    
-  } else if(xvar == "time") {
-    ggplot2::ggplot(abc) + ggplot2::theme_bw() + 
-      ggplot2::geom_point(ggplot2::aes(x = dateStart, y = dailyEnergy)) + 
-      ggplot2::geom_line(ggplot2::aes(x = dateStart, y = fitted, col = type))   + 
-      ggplot2::ggtitle(paste(attr(term, "name", exact = TRUE), "Energy over Time")) + 
-      ggplot2::xlab("Date") +
-      ggplot2::ylab("Daily Energy (kWh)")      
-  }
-
-
-}
-
-
-
-
 

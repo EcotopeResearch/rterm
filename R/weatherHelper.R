@@ -675,7 +675,7 @@ removeStation <- function(comp, name) {
 #' ancTrend$plot
 #' 
 #' 
-stationTrend <- function(weather, var = "aveTemp", days = 60, type = "relative") {
+stationTrend <- function(weather, var = "aveTemp", days = 60, type = "actual") {
   
   weather$year <- as.numeric(format(weather$date, format = "%Y"))
   weather$day <- as.numeric(format(weather$date, format = "%j"))
@@ -687,6 +687,16 @@ stationTrend <- function(weather, var = "aveTemp", days = 60, type = "relative")
   }))
   weather <- arrange(weather, date)
 
+  if(days > 1) px <- "Smoothed" else px <- ""
+  if(var == "aveTemp") {
+    vname <- "Average Temp"
+  } else if(var == "tmin") {
+    vname <- "Min Temp"
+  } else if(var == "tmax") {
+    vname <- "Max Temp"
+  }
+  tx <- paste(px, type, vname)
+  
   fsmooth <- rep(1 / days, days)
   weather$maTemp <- stats::filter(weather$relTemp, fsmooth, sides = 2)
   weather$actualSmoothed <- stats::filter(weather[var], fsmooth, sides = 2)
@@ -696,8 +706,8 @@ stationTrend <- function(weather, var = "aveTemp", days = 60, type = "relative")
   # p <- ggplot(weather[!is.na(weather$maTemp), ]) + theme_bw() + 
   p <- ggplot(weather) + theme_bw() + 
     scale_x_date(breaks = "2 months", labels = scales::date_format("%B")) + 
-    ggtitle(paste("Smoothed Relative", var)) +
-    xlab("") + ylab(paste("Smoothed Relative", var, "(F)")) +
+    ggtitle(tx) +
+    xlab("") + ylab(paste(tx, "(F)")) +
     scale_colour_discrete(name = "Year")
   
   if(type == "relative") {
@@ -706,7 +716,8 @@ stationTrend <- function(weather, var = "aveTemp", days = 60, type = "relative")
     p <- p + geom_line(aes(x = dateDummy, y = actualSmoothed, col = factor(year)))   
   }
   
-  list("data" = weather, "plot" = p)
+  p
+  # list("data" = weather, "plot" = p)
 }
 
 
@@ -850,18 +861,18 @@ stationMap.stationComp <- function(comp, zoom = 10, type = "relative", art = FAL
   mapTmp <- ggmap::get_map(location, maptype = "terrain", color = "bw", zoom = zoom)
   p <- ggmap::ggmap(mapTmp) + 
     ggplot2::geom_point(data = dfl, ggplot2::aes(lon, lat), col = "black", size = 4, shape = 2) +
-    scale_colour_continuous(low = "blue", high = "red", name = legLabel) +
+    ggplot2::scale_colour_continuous(low = "blue", high = "red", name = legLabel) +
     ggplot2::ggtitle(paste("NOAA GHCN Weather Stations Near", attributes(comp$stations)$gmapsSearch, "\n",
                            min(comp$data$date), "to", max(comp$data$date))) +
     ggplot2::xlab("Longitude") + ggplot2::ylab("Latitude")
   
   if(art) {
     p <- p + ggplot2::geom_point(data = df, ggplot2::aes_string(x = "longitude", y = "lat2", col = vname, size = "elevation")) +
-      scale_size_continuous(name = "Elevation", range = c(2.5, 5))
+      ggplot2::scale_size_continuous(name = "Elevation", range = c(2.5, 5))
   } else {
     p <- p + ggplot2::geom_text(data = df, ggplot2::aes_string(x = "longitude", y = "lat2", col = vname, label = "name", size = "dataFrac")) +
       ggplot2::geom_point(data = df, ggplot2::aes_string(x = "longitude", y = "latitude", col = vname), size = 4, shape = 2) +
-      scale_size_continuous(name = "Data Fraction", range = c(2, 4))
+      ggplot2::scale_size_continuous(name = "Data Fraction", range = c(2, 4))
   }
   
   p  

@@ -458,27 +458,27 @@ isChangePoint <- function(coefs, temp) {
 }
 
 
-print.cplm <- function(x) {
-  if(attr(mod, "fit") == "LS") {
-    return(x$LS[!is.na(x$LS)])
-  } else {
-    return(x$L1[!is.na(x$LS)])
-  }
-#   toPrint <- c("baseLoad" = as.numeric(coef(x$mod)[1]))
-#   if(length(coef(x$mod)) == 1) return(toPrint)
-#   if("xHeating" %in% names(x$data)) {
-#     toPrint <- c(toPrint, "changePointHeating" = as.numeric(x$changePoint[1]))
-#     toPrint <- c(toPrint, "heatingSlope" = as.numeric(coef(x$mod)[2]))
-#     if("xCooling" %in% names(x$data)) {
-#       toPrint <- c(toPrint, "changePointCooling" = as.numeric(x$changePoint[2]))
-#       toPrint <- c(toPrint, "coolingSlope" = as.numeric(coef(x$mod)[3]))
-#     }
+# print.cplm <- function(x) {
+#   if(attr(x, "fit") == "LS") {
+#     toPrint <- x$LS[!is.na(x$LS)]
 #   } else {
-#     toPrint <- c(toPrint, "changePointCooling" = as.numeric(x$changePoint[1]))
-#     toPrint <- c(toPrint, "coolingSlope" = as.numeric(coef(x$mod)[2]))
+#     toPrint <- x$L1[!is.na(x$LS)]
 #   }
-#   toPrint
-}
+# #   toPrint <- c("baseLoad" = as.numeric(coef(x$mod)[1]))
+# #   if(length(coef(x$mod)) == 1) return(toPrint)
+# #   if("xHeating" %in% names(x$data)) {
+# #     toPrint <- c(toPrint, "changePointHeating" = as.numeric(x$changePoint[1]))
+# #     toPrint <- c(toPrint, "heatingSlope" = as.numeric(coef(x$mod)[2]))
+# #     if("xCooling" %in% names(x$data)) {
+# #       toPrint <- c(toPrint, "changePointCooling" = as.numeric(x$changePoint[2]))
+# #       toPrint <- c(toPrint, "coolingSlope" = as.numeric(coef(x$mod)[3]))
+# #     }
+# #   } else {
+# #     toPrint <- c(toPrint, "changePointCooling" = as.numeric(x$changePoint[1]))
+# #     toPrint <- c(toPrint, "coolingSlope" = as.numeric(coef(x$mod)[2]))
+# #   }
+#    toPrint
+# }
 
 
 #' Change Point Linear Model Coefficients
@@ -499,20 +499,20 @@ print.cplm <- function(x) {
 #' coef(mod, "L1")
 #' coef(mod, "LS")
 #' 
-coef.cplm <- function(x, fit = NULL, silent = FALSE) {
-  if(is.null(fit)) {
-    fit <- attr(x, "fit")
-  }
-    
-  if(fit == "LS") {
-    if(!silent) print("Least Squares Coefficients:")
-    return(x$LS[!is.na(x$LS)])
-  } else {
-    if(!silent) print("L1 Penalized Least Squares Coefficients:")
-    return(x$L1[!is.na(x$LS)])
-  }  
-
-}
+# coef.cplm <- function(x, fit = NULL, silent = FALSE) {
+#   if(is.null(fit)) {
+#     fit <- attr(x, "fit")
+#   }
+#     
+#   if(fit == "LS") {
+#     if(!silent) print("Least Squares Coefficients:")
+#     return(x$LS[!is.na(x$LS)])
+#   } else {
+#     if(!silent) print("L1 Penalized Least Squares Coefficients:")
+#     return(x$L1[!is.na(x$LS)])
+#   }  
+# 
+# }
 
 #Have an 'annual' method that can be used by the various objects
 annual <- function(x) UseMethod("annual")
@@ -550,26 +550,26 @@ annual.cplm <- function(x, type = "observed") {
   }
 }
 
-
-summary.cplm <- function(object, ...) {
-  coefs <- print(object)
-  if(is.null(object$bootstraps)) {
-    return(coefs)
-  } else {
-    ses <- sapply(names(coefs), function(coef) {
-      sd(object$bootstraps[, coef])
-    })
-    lower95s <- sapply(names(coefs), function(coef) {
-      as.numeric(quantile(object$bootstraps[, coef], .05, na.rm = TRUE))
-    })
-    upper95s <- sapply(names(coefs), function(coef) {
-      as.numeric(quantile(object$bootstraps[, coef], .95, na.rm = TRUE))
-    })
-    df <- data.frame("Estimate" = coefs, "Standard.Error" = ses, 
-                     "Lower.95" = lower95s, "Upper.95" = upper95s)
-    return(df)
-  }
-}
+# 
+# summary.cplm <- function(object, ...) {
+#   coefs <- print(object)
+#   if(is.null(object$bootstraps)) {
+#     return(coefs)
+#   } else {
+#     ses <- sapply(names(coefs), function(coef) {
+#       sd(object$bootstraps[, coef])
+#     })
+#     lower95s <- sapply(names(coefs), function(coef) {
+#       as.numeric(quantile(object$bootstraps[, coef], .05, na.rm = TRUE))
+#     })
+#     upper95s <- sapply(names(coefs), function(coef) {
+#       as.numeric(quantile(object$bootstraps[, coef], .95, na.rm = TRUE))
+#     })
+#     df <- data.frame("Estimate" = coefs, "Standard.Error" = ses, 
+#                      "Lower.95" = lower95s, "Upper.95" = upper95s)
+#     return(df)
+#   }
+# }
 
 
 predict.cplm <- function(object, newdata, fit = NULL) {
@@ -659,7 +659,7 @@ plot.cplm <- function(x, fit = NULL) {
     dfL1 <- data.frame("temp" = ts, "dailyEnergy" = 1, "Fit" = "L1 Penalized")
     dfL1$fitted <- predict(x, dfLs, "L1")
     df2 <- rbind(dfLs, dfL1)
-    print(head(df2))
+    # print(head(df2))
     
     
     #If we have some bootstrap results...
@@ -792,6 +792,12 @@ plot.cplm <- function(x, fit = NULL) {
 #' @seealso \code{\link{plot.cplm}} 
 #' 
 residsPlot <- function(x, ...) UseMethod("residsPlot")
+
+residsPlot.term <- function(x, var) {
+  if(length(x$models) == 1) {
+    return(residsPlot(x$models[[1]]))
+  }
+}
 
 residsPlot.cplm <- function(x, var) {
   #Pull out the formula from the original object, should fit new data
