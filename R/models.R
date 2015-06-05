@@ -1,6 +1,6 @@
 
 ddlm <- function(data, weather, controls) {
-  coefs <- ddlm.fit(data, weather, controls$heating, controls$cooling, controls$intercept, controls$lambda, controls$se, controls$nreps)
+  coefs <- ddlm.fit(data, weather, controls$heating, controls$cooling, controls$intercept, controls$lambda, controls$se, controls$nreps, controls$selection)
   
   mod <- list()
   mod$LS <- coefs$LS
@@ -35,7 +35,7 @@ ddlm <- function(data, weather, controls) {
 }
 
 cplm <- function(data, weather, controls) {
-  coefs <- cplm.fit(data, weather, controls$heating, controls$cooling, controls$intercept, controls$lambda, controls$se, controls$nreps)
+  coefs <- cplm.fit(data, weather, controls$heating, controls$cooling, controls$intercept, controls$lambda, controls$se, controls$nreps, controls$selection)
   
   mod <- list()
   mod$LS <- coefs$LS
@@ -90,7 +90,8 @@ tlm.fit <- function(data, weather, heating = TRUE, cooling = FALSE, intercept = 
                  y,
                  rep(1, nrow(data)),
                  as.integer(heating), as.integer(cooling), 
-                 as.integer(type), as.integer(intercept))
+                 as.integer(type), as.integer(intercept),
+                 PACKAGE = "rterm")
   
   if(se) {
     boot <- .Call("bootstrapBaseTemp", 
@@ -99,7 +100,8 @@ tlm.fit <- function(data, weather, heating = TRUE, cooling = FALSE, intercept = 
                                  y,
                                  rep(1, nrow(data)), as.integer(nreps),
                                  as.integer(heating), as.integer(cooling), 
-                                 as.integer(type), as.integer(intercept))
+                                 as.integer(type), as.integer(intercept),
+                  PACKAGE = "rterm")
     boot <- as.data.frame(boot)
     if(intercept) {
       names(boot)[1] <- "baseLoad"
@@ -153,7 +155,7 @@ tlm.fit <- function(data, weather, heating = TRUE, cooling = FALSE, intercept = 
 }
 
 
-cplm.fit <- function(data, weather, heating = NULL, cooling = NULL, intercept = TRUE, lambda = 0, se = TRUE, nreps = 200) {
+cplm.fit <- function(data, weather, heating = NULL, cooling = NULL, intercept = TRUE, lambda = 0, se = TRUE, nreps = 200, selection = "vbsr") {
   if(is.null(weather$rows)) {
     stop("Must link data to weather before model fitting")
   }
@@ -161,7 +163,8 @@ cplm.fit <- function(data, weather, heating = NULL, cooling = NULL, intercept = 
   l1Results <- .Call("l1", as.numeric(weather$aveTemp),
                      as.integer(weather$rows),
                      as.numeric(data$dailyEnergy),
-                     lambda, 1L, as.integer(intercept))
+                     lambda, 1L, as.integer(intercept),
+                     PACKAGE = "rterm")
   
   if(intercept) {
     names(l1Results) <- c("baseLoad", "heatingBase", "heatingSlope", 
@@ -171,13 +174,24 @@ cplm.fit <- function(data, weather, heating = NULL, cooling = NULL, intercept = 
                           "coolingBase",  "coolingSlope")    
   }
   
+  # Different default heating/cooling based on selection type
+  if(selection == "vbsr") {
+    heatCoolTmp <- vbsrSelect(data, weather, 1L)
+    heatingDefault <- heatCoolTmp$heating
+    coolingDefault <- heatCoolTmp$cooling  
+  } else {
+    heatingDefault <- as.numeric(l1Results['heatingSlope']) > 0
+    coolingDefault <- as.numeric(l1Results['coolingSlope']) > 0
+  }
   
+  # If not manually specified, use the default
   if(is.null(heating)) {
-    heating <- as.numeric(l1Results['heatingSlope']) > 0
+    heating <- heatingDefault
   }
   if(is.null(cooling)) {
-    cooling <- as.numeric(l1Results['coolingSlope']) > 0
+    cooling <- coolingDefault
   }
+
   
   lsResults <- c("baseLoad" = NA, "heatingBase" = NA,
                  "heatingSlope" = NA, "coolingBase" = NA,
@@ -204,7 +218,7 @@ cplm.fit <- function(data, weather, heating = NULL, cooling = NULL, intercept = 
 
 
 
-ddlm.fit <- function(data, weather, heating = NULL, cooling = NULL, intercept = TRUE, lambda = 7, se = TRUE, nreps = 200) {
+ddlm.fit <- function(data, weather, heating = NULL, cooling = NULL, intercept = TRUE, lambda = 7, se = TRUE, nreps = 200, selection = "vbsr") {
   if(is.null(weather$rows)) {
     stop("Must link data to weather before model fitting")
   }
@@ -212,7 +226,8 @@ ddlm.fit <- function(data, weather, heating = NULL, cooling = NULL, intercept = 
   l1Results <- .Call("l1", as.numeric(weather$aveTemp),
                      as.integer(weather$rows),
                      as.numeric(data$dailyEnergy),
-                     lambda, 2L, as.integer(intercept))
+                     lambda, 2L, as.integer(intercept),
+                     PACKAGE = "rterm")
   
   if(intercept) {
     names(l1Results) <- c("baseLoad", "heatingBase", "heatingSlope", 
@@ -222,11 +237,22 @@ ddlm.fit <- function(data, weather, heating = NULL, cooling = NULL, intercept = 
                           "coolingBase",  "coolingSlope")    
   }
   
+  # Different default heating/cooling based on selection type
+  if(selection == "vbsr") {
+    heatCoolTmp <- vbsrSelect(data, weather, 2L)
+    heatingDefault <- heatCoolTmp$heating
+    coolingDefault <- heatCoolTmp$cooling  
+  } else {
+    heatingDefault <- as.numeric(l1Results['heatingSlope']) > 0
+    coolingDefault <- as.numeric(l1Results['coolingSlope']) > 0
+  }
+  
+  # If not manually specified, use the default
   if(is.null(heating)) {
-    heating <- as.numeric(l1Results['heatingSlope']) > 0
+    heating <- heatingDefault
   }
   if(is.null(cooling)) {
-    cooling <- as.numeric(l1Results['coolingSlope']) > 0
+    cooling <- coolingDefault
   }
   
   
@@ -438,7 +464,7 @@ plot.term <- function(term, xvar = NULL) {
     p <- ggplot2::ggplot(abc) + ggplot2::theme_bw() + 
       ggplot2::ggtitle(paste(attr(term, "name", exact = TRUE), "Residuals over Time")) + 
       ggplot2::xlab("Date") +
-      ggplot2::ylab("Daily Energy (kWh)")
+      ggplot2::ylab("Daily Energy Relative to Expected, Given Outdoor Temp (kWh)")
     if(nmodels > 1) {
       p <- p + ggplot2::geom_point(ggplot2::aes(x = dateStart, y = resid, col = type)) +
         ggplot2::geom_smooth(ggplot2::aes(x = dateStart, y = resid, col = type), se = FALSE)
@@ -596,3 +622,46 @@ bootstraps <- function(mod) {
     ggplot2::facet_grid(. ~ variable, scales = "free") +
     ggplot2::ggtitle("Bootstrap Replicate Distributions")
 }
+
+
+vbsrSelect <- function(data, weather, type) {
+  
+  heatingRange <- seq(from = 30, to = 80, by = 5)
+  coolingRange <- seq(from = 50, to = 90, by = 5)
+  
+  X <- matrix(0, nrow = nrow(data), ncol = length(heatingRange) + length(coolingRange))
+  y <- data$dailyEnergy
+
+  Xheating <- do.call('cbind', lapply(heatingRange, function(x) {
+    deriveOne(weather, x, type, 1,nrow(data))
+  }))
+  Xcooling <- do.call('cbind', lapply(coolingRange, function(x) {
+    deriveOne(weather, x, type, 2,nrow(data))
+  }))
+  X <- cbind(Xheating, Xcooling)
+  colnames(X) <- c(paste0("th", heatingRange), paste0("tc", coolingRange))
+  
+  # Remove columns of zeros
+  
+  X <- X[, apply(X, 2, function(x) sum(x > 0)) > 0]
+  
+  # Fit the spike model and look for significance
+  mod <- vbsr::vbsr(y, X, family = "normal")
+  pos <- mod$beta > 0
+  
+  pval <- 0.05 / ncol(X)
+  signif <- which(mod$pval[pos] < pval)
+  toReturn <- list("heating" = FALSE, "cooling" = FALSE)
+  if(length(signif)) {
+    print(colnames(X)[pos][signif])
+    if(length(grep("th", colnames(X)[pos][signif]))) {
+      toReturn$heating <- TRUE
+    }
+    if(length(grep("tc", colnames(X)[pos][signif]))) {
+      toReturn$cooling <- TRUE
+    }
+  }
+  toReturn
+}
+
+
