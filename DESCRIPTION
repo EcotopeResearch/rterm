@@ -16,6 +16,7 @@ Imports:
   dplyr,
   tidyr,
   lubridate,
-  ggmap
+  ggmap,
+  vbsr
 Suggests: knitr
 VignetteBuilder: knitr
