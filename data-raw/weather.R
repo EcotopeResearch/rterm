@@ -18,6 +18,9 @@ sts <- lapply(1:nQueries, function(i) {
 stations <- do.call('rbind', sts)
 stations$name <- gsub("\\s+$", "", stations$name)
 
+# Set maxdate to missing for any stations returning data in last month
+monthAgo <- lubridate::today() - months(1)
+stations$maxdate[stations$maxdate > monthAgo] <- NA
 
 
 # Read in the country info, we'll merge that to get a country variable
