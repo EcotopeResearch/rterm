@@ -69,17 +69,126 @@ cplm <- function(data, weather, controls) {
   
 }
 
+web <- function(data, weather, controls) {
+  # Model selection... with L1 right now
+  selec <- modelSelect(data, weather, controls$intercept, controls$lambda)
+  l1Results <- selec$l1Results
+
+  # If not manually specified, use the default
+  if(is.null(controls$heating)) {
+    heating <- selec$heatingDefault
+  } else {
+    heating <- controls$heating
+  }
+  if(is.null(controls$cooling)) {
+    cooling <- selec$coolingDefault
+  } else {
+    cooling <- controls$cooling
+  }
+  
+  if(!heating & !cooling) {
+    mod <- list()
+    mod$L1 <- l1Results
+    tmp <- c("heatingBase" = NA, "heatingSlope" = NA,
+             "coolingBase" = NA, "coolingSlope" = NA)
+    if(controls$intercept) {
+      mod$LS <- c("baseLoad" = mean(data$dailyEnergy), tmp)
+    } else {
+      mod$LS <- tmp
+    }
+    mod$data <- data
+    attr(mod, "fit") <- "LS"
+    class(mod) <- c("web", "tlm")
+    mod$data$fitted <- fitted(mod)
+    mod$data$resid <- mod$data$dailyEnergy - mod$data$fitted
+    return(mod)
+  }
+  
+  # Derive an average temperature variable...
+  oat <- deriveOne(weather, base = 60, type = 3L, 
+                   heatcool = 1L, n = nrow(data))
+  
+  # Fit
+  stan_data <- list(N = nrow(data), 
+                    x = oat,
+                    Y = data$dailyEnergy)
+  
+  cat(writeStan(controls$intercept, heating, cooling, controls$baseLoad, controls$heatingBase, controls$heatingSlope, controls$coolingBase, controls$coolingSlope), sep = "\n")
+  
+  fitx <- rstan::stan(model_code = paste(writeStan(controls$intercept, heating, cooling), collapse = ""), 
+              data = stan_data, iter = 500, chains = 4)
+  
+  medianModel <- summary(fitx)[["summary"]][, "50%"]
+  print(summary(fitx))
+  print(medianModel)
+  allCoefs <- c("baseLoad", "heatingBase", "heatingSlope",
+                "coolingBase", "coolingSlope")
+  coefMatch <- allCoefs %in% names(medianModel)
+
+  samples <- extract(fitx)
+  cols <- names(samples) %in% allCoefs
+  samp <- do.call('cbind', lapply(names(samples), function(x) {
+    if(x %in% allCoefs) samples[[x]] else NULL
+  }))
+  samp <- data.frame(samp)
+  names(samp) <- names(samples)[cols]
+  
+  lsResults <- c("baseLoad" = NA, "heatingBase" = NA,
+                 "heatingSlope" = NA, "coolingBase" = NA,
+                 "coolingSlope" = NA)
+  for(coef in names(lsResults)) {
+    if(!is.null(medianModel[coef])) {
+      lsResults[coef] <- medianModel[coef]
+    }
+  }
+  
+  
+  mod <- list()
+  # mod$LS <- medianModel[allCoefs[coefMatch]]
+  mod$LS <- lsResults
+  mod$L1 <- l1Results
+  mod$data <- data
+  mod$bootstraps <- samp
+  mod$summary <- summary(fitx)[["summary"]]
+  
+  # Choose the model fit to use... will have to add logic
+  attr(mod, "fit") <- "LS"
+  
+  # Create derived variables
+  if(attr(mod, "fit") == "LS") {
+    coefs <- mod$LS
+  } else {
+    coefs <- mod$L1
+  }
+  
+  if(!is.na(coefs['heatingBase'])) {
+    mod$data$xHeating <- deriveOne(weather, coefs['heatingBase'], type = 1L, heatcool = 1L, n = nrow(data))
+  }
+  if(!is.na(coefs['coolingBase'])) {
+    mod$data$xCooling <- deriveOne(weather, coefs['coolingBase'], type = 1L, heatcool = 2L, n = nrow(data))
+  }
+  mod$data$temp <- deriveOne(weather, coefs['coolingBase'], type = 3L, heatcool = 1L, n = nrow(data))
+  
+  class(mod) <- c("web", "tlm")
+  mod$data$fitted <- fitted(mod)
+  mod$data$resid <- mod$data$dailyEnergy - mod$data$fitted
+  
+  
+  mod
+  
+}
+
 
 tlm.fit <- function(data, weather, heating = TRUE, cooling = FALSE, intercept = TRUE, se = TRUE, nreps = 200, type = 1L) {
   
-  if(type == 1) {
-    y <- as.numeric(data$dailyEnergy)
-  } else if(type == 2) {
+  if(!is.null(data$eui)) {
+    y <- as.numeric(data$eui)
+  } else {
     y <- as.numeric(data$dailyEnergy)
   }
   
   if(!heating & !cooling) {
-    return(list("coefs" = c("baseLoad" = mean(data$dailyEnergy))))
+    return(list("coefs" = c("baseLoad" = mean(y))))
   }
   
   toReturn <- list()
@@ -406,14 +515,104 @@ print.term <- function(term) {
 }
 
 
+annual <- function(x, ...) {
+  UseMethod("annual")
+}
+
 # Annual summary
 annual.term <- function(term) {
+  if(!is.null(attr(term, "sqft"))) {
+    eui <- TRUE
+  } else {
+    eui <- FALSE
+  }
+  do.call('rbind', lapply(term$models, function(x) {
+    annual(x, bounds = FALSE, eui)
+  }))
+}
+
+annual.tlm <- function(x, bounds = TRUE, eui = FALSE) {
+  # Leave off the last fraction of a year
+  # If not a full year cannot report annual
+  minDate <- min(x$data$dateStart)
+  maxDate <- max(x$data$dateEnd)
+  dspan <- lubridate::interval(minDate, maxDate)
+  nYears <- dspan %/% lubridate::years(1)
+  if(nYears < 1) {
+    stop("Cannot annualize with less than one year of data")
+  }
   
+  newMaxDate <- minDate + lubridate::years(nYears)
+  toUse <- x$data$dateStart < newMaxDate
+  x$data <- x$data[toUse, ]
+  
+  coefs <- coef(x, silent = TRUE)
+  ann <- annOne(x$data, coefs, nYears, eui)
+  
+  if(!is.null(x$bootstraps) & bounds) {
+    annDist <- data.frame(t(apply(x$bootstraps, 1, function(y) {
+      annOne(x$data, y, nYears)
+    })))
+    annDist2 <- do.call('cbind', lapply(annDist, function(x) {
+      c("2.5%" = as.numeric(quantile(x, .025)), 
+        "25%" =  as.numeric(quantile(x, .25)), 
+        "75%" =  as.numeric(quantile(x, .75)), 
+        "97.5%" = as.numeric(quantile(x, .975)))
+    }))
+    ann <- rbind("median" = ann, annDist2)
+  }
+  ann
+}
+
+annOne <- function(data, coefs, nYears, eui = FALSE) {
+  ann <- c()
+  annFracs <- c()
+  if(!is.na(coefs['baseLoad'])) {
+    data$base <- coefs['baseLoad']
+    if(eui) {
+      ann <- c(ann, "Base Load" = sum(data$base * data$days) / sum(data$days))
+    } else {
+      ann <- c(ann, "Base Load" = sum(data$base * data$days) / nYears)
+    }
+  }
+  if(!is.null(data$xHeating)) {
+    data$heating <- data$xHeating * coefs['heatingSlope']
+    if(eui) {
+      ann <- c(ann, "Heating" = sum(data$heating * data$days) / sum(data$days))  
+    } else {
+      ann <- c(ann, "Heating" = sum(data$heating * data$days) / nYears)  
+    }
+  }
+  if(!is.null(data$xCooling)) {
+    data$cooling <- data$xCooling * coefs['coolingSlope']
+    if(eui) {
+      ann <- c(ann, "Cooling" = sum(data$cooling * data$days) / sum(data$days))
+    } else {
+      ann <- c(ann, "Cooling" = sum(data$cooling * data$days) / nYears)  
+    } 
+  }
+  
+  if(!is.na(ann['Base Load'])) {
+    annFracs <- c(annFracs, "Base.Load.Frac" = as.numeric(ann['Base Load']) / sum(ann))
+  }
+  if(!is.na(ann['Heating'])) {
+    annFracs <- c(annFracs, "Heating.Frac" = as.numeric(ann['Heating']) / sum(ann))
+  }
+  if(!is.na(ann['Cooling'])) {
+    annFracs <- c(annFracs, "Cooling.Frac" = as.numeric(ann['Cooling']) / sum(ann))
+  }
+  
+  c(ann, annFracs)
 }
 
 plot.term <- function(term, xvar = NULL) {
   if(is.null(xvar)) {
     xvar <- "temp"
+  }
+  if(!is.null(attr(term, "sqft"))) {
+    yvar <- "Annualized EUI"
+  } else {
+    yvar <- "Daily kWh"
   }
   
   nmodels <- length(term$models)
@@ -443,7 +642,7 @@ plot.term <- function(term, xvar = NULL) {
       ggplot2::geom_point(data = meanTemps, ggplot2::aes(x = temp, y = dailyEnergy)) + 
       ggplot2::ggtitle(paste(attr(term, "name", exact = TRUE), "Energy versus Temperature")) + 
       ggplot2::xlab("Average Temperature (F)") +
-      ggplot2::ylab("Daily Energy (kWh)")
+      ggplot2::ylab(yvar)
     if(nmodels > 1) {
       p <- p + ggplot2::geom_line(ggplot2::aes(x = temp, y = fitted, col = type))
     } else {
@@ -454,7 +653,7 @@ plot.term <- function(term, xvar = NULL) {
       ggplot2::geom_point(ggplot2::aes(x = dateStart, y = dailyEnergy)) + 
       ggplot2::ggtitle(paste(attr(term, "name", exact = TRUE), "Energy over Time")) + 
       ggplot2::xlab("Date") +
-      ggplot2::ylab("Daily Energy (kWh)")
+      ggplot2::ylab(yvar)
     if(nmodels > 1) {
       p <- p + ggplot2::geom_line(ggplot2::aes(x = dateStart, y = fitted, col = type))
     } else {
@@ -464,10 +663,13 @@ plot.term <- function(term, xvar = NULL) {
     p <- ggplot2::ggplot(abc) + ggplot2::theme_bw() + 
       ggplot2::ggtitle(paste(attr(term, "name", exact = TRUE), "Residuals over Time")) + 
       ggplot2::xlab("Date") +
-      ggplot2::ylab("Daily Energy Relative to Expected, Given Outdoor Temp (kWh)")
+      ggplot2::ylab(paste(yvar, "Relative to Expected, Given Outdoor Temp")) +
+      ggplot2::facet_wrap(~type)
     if(nmodels > 1) {
       p <- p + ggplot2::geom_point(ggplot2::aes(x = dateStart, y = resid, col = type)) +
-        ggplot2::geom_smooth(ggplot2::aes(x = dateStart, y = resid, col = type), se = FALSE)
+        ggplot2::geom_smooth(ggplot2::aes(x = dateStart, y = resid, col = type), se = FALSE) +
+        ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
+        ggplot2::scale_x_date(breaks = scales::date_breaks(width = "3 months"), labels = scales::date_format("%b %Y"))
     } else {
       p <- p + ggplot2::geom_point(ggplot2::aes(x = dateStart, y = resid)) +
         ggplot2::geom_smooth(ggplot2::aes(x = dateStart, y = resid), se = FALSE)
@@ -478,7 +680,10 @@ plot.term <- function(term, xvar = NULL) {
 }
 
 
-
+residsPlot <- function(x) {
+  # Assume a tlm
+  ggplot2::ggplot(x$data)
+}
 
 
 plot.tlm <- function(x, fit = NULL) {
@@ -496,7 +701,7 @@ plot.tlm <- function(x, fit = NULL) {
   #If we have some bootstrap results...
   if(!is.null(x$bootstraps) & fit == "LS") {
     bootDf <- do.call('rbind', lapply(1:nrow(x$bootstraps), function(i) {
-      dfTmp <- data.frame("temp" = ts)
+      dfTmp <- data.frame("temp" = df$temp)
       dfTmp$fitted <- x$bootstraps$baseLoad[i]
       if(heating) {
         dfTmp$xHeating <- makeCpVar(dfTmp$temp, x$bootstraps$heatingBase[i], heating = TRUE) 
@@ -534,11 +739,11 @@ plot.tlm <- function(x, fit = NULL) {
   
   plotObject <- ggplot2::ggplot(df) + ggplot2::theme_bw() + 
     ggplot2::geom_point(ggplot2::aes(x = temp, y = dailyEnergy)) + 
-    ggplot2::ggtitle(paste("dailyEnergy by Mean OAT")) +
-    ggplot2::xlab("Mean OAT (F)") + ggplot2::ylab("dailyEnergy (kWh)")
+    ggplot2::ggtitle(paste(yvar, "by Mean OAT")) +
+    ggplot2::xlab("Mean OAT (F)") + ggplot2::ylab(yvar)
   
   if(fit == "LS") {
-    plotObject <- plotObject + ggplot2::geom_line(data = dfLs, ggplot2::aes(x = temp, y = fitted))
+    plotObject <- plotObject + ggplot2::geom_line(data = df, ggplot2::aes(x = temp, y = fitted))
   } else if(fit == "L1") {
     plotObject <- plotObject + ggplot2::geom_line(data = dfL1, ggplot2::aes(x = temp, y = fitted))
   } else {
@@ -585,6 +790,9 @@ coef.tlm <- function(x, fit = NULL, silent = FALSE) {
 
 
 summary.tlm <- function(object, ...) {
+  if(inherits(object, "web")) {
+    return(object$summary)
+  }
   coefs <- print(object)
   if(is.null(object$bootstraps)) {
     return(coefs)
@@ -665,3 +873,33 @@ vbsrSelect <- function(data, weather, type) {
 }
 
 
+modelSelect <- function(data, weather, intercept, lambda, selection = "L1") {
+  l1Results <- .Call("l1", as.numeric(weather$aveTemp),
+                     as.integer(weather$rows),
+                     as.numeric(data$dailyEnergy),
+                     lambda, 1L, as.integer(intercept),
+                     PACKAGE = "rterm")
+  
+  if(intercept) {
+    names(l1Results) <- c("baseLoad", "heatingBase", "heatingSlope", 
+                          "coolingBase",  "coolingSlope")    
+  } else {
+    names(l1Results) <- c("heatingBase", "heatingSlope", 
+                          "coolingBase",  "coolingSlope")    
+  }
+  
+  # Different default heating/cooling based on selection type
+  if(selection == "vbsr") {
+    heatCoolTmp <- vbsrSelect(data, weather, 1L)
+    heatingDefault <- heatCoolTmp$heating
+    coolingDefault <- heatCoolTmp$cooling  
+  } else {
+    heatingDefault <- as.numeric(l1Results['heatingSlope']) > 0
+    coolingDefault <- as.numeric(l1Results['coolingSlope']) > 0
+  }
+  
+  list("l1Results" = l1Results,
+       "heatingDefault" = heatingDefault,
+       "coolingDefault" = coolingDefault)
+  
+}
