@@ -691,6 +691,13 @@ plot.tlm <- function(x, fit = NULL) {
   if(is.null(fit)) {
     fit <- attr(x, "fit")
   }
+  
+  if(!is.null(attr(x, "sqft"))) {
+    yvar <- "Annualized EUI"
+  } else {
+    yvar <- "Daily kWh"
+  }
+  
   #Make the energy & temp into a data frame for ggplot
   df <- x$data
   

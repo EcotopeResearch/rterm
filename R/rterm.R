@@ -341,6 +341,10 @@ evalOne <- function(term, method, weather) {
     warning(paste("Unrecognized method", names(method), "skipping"))
   }
   
+  if(!is.null(attr(term, "sqft"))) {
+    attr(mod, "sqft") <- attr(term, "sqft")
+  }
+  
   return(mod)
 }
 
