@@ -17,6 +17,7 @@ Imports:
   tidyr,
   lubridate,
   ggmap,
-  vbsr
+  vbsr,
+  methods
 Suggests: knitr
 VignetteBuilder: knitr
