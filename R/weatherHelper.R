@@ -241,8 +241,8 @@ read.ghcn.monthly <- function(stationid, startdate, enddate) {
   if(inherits(edDate, "try-error")) {
     stop(paste("Could not parse end date", enddate))
   }
-  
-  monthsToGet <- lubridate::interval(stDate, edDate) %/% months(1)
+  fullInt <- lubridate::interval(stDate, edDate)
+  monthsToGet <- lubridate::as.period(fullInt) %/% months(1)
   
   # We can download 100 months at a time
   nCalls <- ceiling(monthsToGet / 100)
@@ -331,7 +331,7 @@ calcDistance <- function(lat1, lon1, lat2, lon2) {
 #' stationSearch(country = "Switzerland")
 #' 
 #' 
-stationSearch <- function(geocode = NULL, stationName = NULL, lat = NULL, lon = NULL, nClosest = 5, country = NULL, state = NULL) {
+stationSearch <- function(geocode = NULL, stationName = NULL, lat = NULL, lon = NULL, nClosest = 5, country = NULL, state = NULL, elevThreshold = NULL) {
   # Check for a country and/or state
   if(!is.null(country)) {
     stations <- stations[grep(country, stations$country, ignore.case = TRUE), ]
@@ -378,6 +378,10 @@ stationSearch <- function(geocode = NULL, stationName = NULL, lat = NULL, lon = 
     ind <- 1:nrow(stations)
   }
 
+  if(!is.null(elevThreshold)) {
+    stations <- stations[abs(stations$elevation - elev) < elevThreshold, ]
+  }
+  
   stations <- subset(stations, select = -c(country, state))
   
   attr(stations, "lat") <- lat
@@ -788,7 +792,8 @@ assignStations <- function(dset, varname, quietly = TRUE) {
     if(!quietly) {
       print(paste("Assigning Station for", x))
     }
-    stations <- stationSearch(x, nClosest = 1)
+    locInfo <- geocode(x)
+    stations <- stationSearch(x, nClosest = 1, elevThreshold = 200)
     if(is.null(stations)) return(NULL)
     names(stations)[names(stations) == "id"] <- "stationid"
     stations[varname] <- x
