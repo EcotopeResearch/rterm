@@ -515,40 +515,40 @@ isChangePoint <- function(coefs, temp) {
 # }
 
 #Have an 'annual' method that can be used by the various objects
-annual <- function(x) UseMethod("annual")
-
-annual.cplm <- function(x, type = "observed") {
-  coefs <- coef(x, silent = TRUE)
-  if(is.na(coefs['baseLoad'])) {
-    stop("Cannot Annualize A Fit W/ No Base Load")
-  } else {
-    energy <- x$data$energy
-    temp <- x$data$temp
-    if(type == "observed") {
-      toRet <- c("Total" = sum(energy))
-      if(!is.na(coefs['heatingSlope'])) {
-        tmp <- sum((energy - coefs['baseLoad'])[temp < coefs['heatingBase']])
-        toRet <- c(toRet, "Heating" = tmp)
-      }
-      if(!is.na(coefs['coolingSlope'])) {
-        tmp <- sum((energy - coefs['baseLoad'])[temp > coefs['coolingBase']])
-        toRet <- c(toRet, "Cooling" = tmp)
-      }
-      
-      tmp <- toRet['Total']
-      if(!is.na(toRet['Heating'])) {
-        tmp <- tmp - toRet['Heating']
-      }
-      if(!is.na(toRet['Cooling'])) {
-        tmp <- tmp - toRet['Cooling']
-      }
-      toRet <- c(toRet, "Base Load" = as.numeric(tmp))
-      return(toRet)
-    } else if(type == "TMY") {
-      stop("TMY Annualization Not Yet Implemented")
-    }
-  }
-}
+# annual <- function(x) UseMethod("annual")
+# 
+# annual.cplm <- function(x, type = "observed") {
+#   coefs <- coef(x, silent = TRUE)
+#   if(is.na(coefs['baseLoad'])) {
+#     stop("Cannot Annualize A Fit W/ No Base Load")
+#   } else {
+#     energy <- x$data$energy
+#     temp <- x$data$temp
+#     if(type == "observed") {
+#       toRet <- c("Total" = sum(energy))
+#       if(!is.na(coefs['heatingSlope'])) {
+#         tmp <- sum((energy - coefs['baseLoad'])[temp < coefs['heatingBase']])
+#         toRet <- c(toRet, "Heating" = tmp)
+#       }
+#       if(!is.na(coefs['coolingSlope'])) {
+#         tmp <- sum((energy - coefs['baseLoad'])[temp > coefs['coolingBase']])
+#         toRet <- c(toRet, "Cooling" = tmp)
+#       }
+#       
+#       tmp <- toRet['Total']
+#       if(!is.na(toRet['Heating'])) {
+#         tmp <- tmp - toRet['Heating']
+#       }
+#       if(!is.na(toRet['Cooling'])) {
+#         tmp <- tmp - toRet['Cooling']
+#       }
+#       toRet <- c(toRet, "Base Load" = as.numeric(tmp))
+#       return(toRet)
+#     } else if(type == "TMY") {
+#       stop("TMY Annualization Not Yet Implemented")
+#     }
+#   }
+# }
 
 # 
 # summary.cplm <- function(object, ...) {
