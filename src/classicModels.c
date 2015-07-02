@@ -204,7 +204,7 @@ double findBestBaseTemp(double *X, double *temps, int *rows, double *energy, dou
           X[intercept * ndata + j] = cpVarTmp[j];
         }
   
-        deriveVarC(temps, t, cpVarTmp, rows, 2, ndata, nweather, type);
+        deriveVarC(temps, t2, cpVarTmp, rows, 2, ndata, nweather, type);
         if(vecsum(cpVarTmp, ndata) == 0) {
           continue;
         }
@@ -217,6 +217,7 @@ double findBestBaseTemp(double *X, double *temps, int *rows, double *energy, dou
         //ssTmp = ssError(X, energy, n, p, betahat);
         ssTmp = ssError(X, energy, ndata, p, betahat);
         //printf("t = %f, t2 = %f, bl = %f, hs = %f, cs = %f, ss = %f\n", t, t2, betahat[0], betahat[1], betahat[2], ssTmp);
+
 
         //Check if the sum of squared errors is better
         if(ssBest == 0 && betahat[intercept] >= 0 && betahat[intercept + 1] >= 0) {
