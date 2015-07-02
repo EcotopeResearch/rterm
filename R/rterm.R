@@ -1,6 +1,6 @@
 
 
-newTerm <- function(name = NULL, address = NULL) {
+newTerm <- function(name = NULL, address = NULL, sqft = NULL) {
   term <- list()
   term$data <- NULL
   term$weather <- list()
@@ -12,6 +12,9 @@ newTerm <- function(name = NULL, address = NULL) {
   }
   if(!is.null(address)) {
     attr(term, "address") <- address
+  }
+  if(!is.null(sqft)) {
+    attr(term, "sqft") <- sqft
   }
   return(term)
 }
@@ -70,7 +73,7 @@ addData <- function(term, data, formula = NULL, interval = NULL, energyVar = NUL
         if(sum(term$data[, -1][, daysVar] > 0) == 0) {
           names(term$data)[-1][dateVar] <- "dateEnd"
         } else {
-          names(term$data)[-1][dateVar] <- "dateStart"
+          names(term$data)[-1][dateVar] <- "dateEnd"
         }
         term$data[, -1][, daysVar] <- abs(term$data[, -1][, daysVar])
         names(term$data)[-1][daysVar] <- "days"
@@ -90,6 +93,9 @@ addData <- function(term, data, formula = NULL, interval = NULL, energyVar = NUL
       } else if(interval == "daily") {
         names(term$data)[2] <- "dateStart"
         term$data$dateEnd <- term$data$dateStart + lubridate::days(1)
+      } else if(interval == "weekly") {
+        names(term$data)[2] <- "dateStart"
+        term$data$dateEnd <- term$data$dateStart + lubridate::days(7)
       } else if(varClasses[2] == "Date") {
         warning("One Date variable found, assuming this is the end date")
         names(term$data)[2] <- "dateEnd"
@@ -140,7 +146,11 @@ addData <- function(term, data, formula = NULL, interval = NULL, energyVar = NUL
     term$data$energy <- term$data$dailyEnergy * term$data$days
   } else {
     term$data$dailyEnergy <- term$data$energy / term$data$days
+    if(!is.null(attr(term, "sqft"))) {
+      term$data$dailyEnergy <- term$data$dailyEnergy * 3.412 / attr(term, "sqft") * 365
+    }
   }
+  
   
   
   term
@@ -234,30 +244,6 @@ addWeather <- function(term, weather = NULL, formula = NULL, stationid = NULL, t
     term$weather[[name]]$missing[missingTemps] <- TRUE
   }
   
-  
-#   
-#   
-#   if(sum(missingTemps) > 0) {
-#     if(sum(missingTemps) / length(missingTemps) > .25) {
-#       warning("More than 25% of temperatures are missing. Consider another weather source")
-#     }
-#     
-#     term$weather[[name]]$missing <- FALSE
-#     term$weather[[name]]$missing[missingTemps] <- TRUE
-#     
-#     x <- term$weather[[name]]
-#     x$sin1 <- sin(as.numeric(x$date) / 365 * 2 * pi)
-#     x$cos1 <- cos(as.numeric(x$date) / 365 * 2 * pi)
-#     
-#     mod <- lm(aveTemp ~ sin1 + cos1, data = x)
-#     x$fitted <- predict(mod, x)
-#   
-#     term$weather[[name]]$aveTemp[missingTemps] <- x$fitted[missingTemps]
-#     term$weather$sin1 <- NULL
-#     term$weather$sin2 <- NULL
-#   }
-
-  
   term
 }
 
@@ -274,6 +260,9 @@ addMethod <- function(term, method, name = NULL, ...) {
   } else if(tolower(method) %in% c("degree-day", "degreeday", "dd")) {
     method <- "dd"
     defaults <- list(heating = NULL, cooling = NULL, intercept = TRUE, se = TRUE, nreps = 200, parametric = FALSE, lambda = 8, selection = "L1") 
+  } else if(tolower(method) %in% c("web", "bayes", "bayesian")) {
+    method <- "web"
+    defaults <- list(heating = NULL, cooling = NULL, intercept = TRUE, selection = "L1", lambda = 10, baseLoad = 50, heatingBase = 55, heatingSlope = 15, coolingBase = 75, coolingSlope = 15) 
   } else {
     stop(paste("Unrecognized Method", method))
   }
@@ -346,6 +335,8 @@ evalOne <- function(term, method, weather) {
     mod <- cplm(dset, weather, term$methods[[method]])
   } else if(length(grep("dd", names(term$methods[method])))) {
     mod <- ddlm(dset, weather, term$methods[[method]])
+  } else if(length(grep("web", names(term$methods[method])))) {
+    mod <- web(dset, weather, term$methods[[method]])
   } else {
     warning(paste("Unrecognized method", names(method), "skipping"))
   }
