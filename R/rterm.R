@@ -212,7 +212,7 @@ addWeather <- function(term, weather = NULL, formula = NULL, stationid = NULL, t
       if(inherits(term$weather[[name]][, 2], "POSIXt")) {
         names(term$weather[[name]])[2] <- "time"
         term$weather[[name]]$date <- as.Date(term$weather[[name]]$time)
-      } else if(inherits(term$weather[[name]][, 1], "Date")) {
+      } else if(inherits(term$weather[[name]][, 2], "Date")) {
         names(term$weather[[name]])[2] <- "date"
       } else {
         stop("Time variable must be either POSIXt or Date")
