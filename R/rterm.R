@@ -1,5 +1,23 @@
 
 
+
+#' Initialize a new "term" - temperature energy regression model
+#' 
+#' Returns a new term object to populate with data, weather, and methods
+#' 
+#' @param name an optional name for the term. This will go in tables and graphs
+#' @param address an optional address. If specified then the \code{\link{addWeather}} 
+#'  function will automatically grab the closest weather station.
+#' @param sqft an optional building size. If you specify a square feet, it will assume
+#'  that you're dealing in total kWh and will convert that to EUI
+#' 
+#' @seealso \code{\link{addData}} \code{\link{addWeather}} \code{\link{addMethod}}
+#' 
+#' @return the new term object
+#' 
+#' @examples
+#' # Show available datasets
+#' newTerm("Ecotope Mothership", "4056 9th Ave NE Seattle, WA", 2600)
 newTerm <- function(name = NULL, address = NULL, sqft = NULL) {
   term <- list()
   term$data <- NULL
@@ -20,6 +38,36 @@ newTerm <- function(name = NULL, address = NULL, sqft = NULL) {
 }
 
 
+#' Add data to a "term" object
+#' 
+#' Adds a dataset & instructions to a term object, returns the updated object
+#' 
+#' @param term the term object to add data
+#' @param data the dataset to add
+#' @param formula an optional specification for energy variable and date variables,
+#'  for example kwhd ~ dateStart + dateEnd.
+#' @param interval an optional specification for interval data. "daily" or "monthly"
+#' @param energyVar an optional manual specification of the energy variable of the
+#'  dataset.
+#' @param dateStartVar an optional manual specification of the start date variable.
+#' @param dateEndVar an optional manual specification of the end date variable.
+#' @param daysVar an optional specification of the days in cycle variable (mainly 
+#'  for billing data). Note that you only need to specify any two of dateStartVar,
+#'  dateEndVar, and daysVar if you do the manual specification.
+#' @param daily whether or not the energy use is total across the interval or daily.
+#'  Mostly this is daily by the time the analyst gets it, but if dealing with raw
+#'  consumption specify daily = FALSE
+#' 
+#' @seealso \code{\link{newTerm}} \code{\link{addWeather}} \code{\link{addMethod}}
+#' 
+#' @return the term object with data added
+#' 
+#' @examples
+#' # Ecotope Mothership data
+#' data(ecotope)
+#' mod <- newTerm("Ecotope Mothership")
+#' mod <- addData(mod, ecotope, kwhd ~ dateStart + dateEnd)
+#' mod <- addData(mod, ecotope, energyVar = "kwhd", dateStartVar = "dateStart", dateEndVar = "dateEnd")
 addData <- function(term, data, formula = NULL, interval = NULL, energyVar = NULL, dateStartVar = NULL, dateEndVar = NULL, daysVar = NULL, daily = TRUE) {
   if(!inherits(term, "term")) {
     stop("Must add data to a term object. See help(addData)")
@@ -158,6 +206,36 @@ addData <- function(term, data, formula = NULL, interval = NULL, energyVar = NUL
 
 
 
+
+#' Add weather to a "term" object
+#' 
+#' Adds a weather & instructions to a term object, returns the updated object. 
+#' If you specified an address in the term construction with \code{\link{newTerm}} 
+#' then this function will take care of everything automatically. Note that you 
+#' can add multiple weather stations to the "term" object with repeated calls of
+#' this function.
+#' 
+#' @param term the term object to add data
+#' @param stationid optional GHCN ID as found from \code{\link{stationSearch}}. 
+#' @param weather optional dataset if providing your own weather (rather than
+#'  using the built-in integration with NOAA).
+#' @param formula optional specification of time variable and temp variable if
+#'  providing your own weather. Example temp ~ date. 
+#' @param timeVar optional manual specification of date variable if providing your
+#'  own weather data.
+#' @param tempVar optional manual specification of temp variable if providing your
+#'  own weather data.
+#' @param name optional name for this particular weather. Example name = "Sea-Tac" 
+#'  is way better than "SEATTLE-TACOMA INTERNATIONAL AIRPORT"
+#' 
+#' @seealso \code{\link{newTerm}} \code{\link{addData}} \code{\link{addMethod}}
+#' 
+#' @return the term object w/ weather added
+#' 
+#' @examples
+#' # Add weather
+#' stationSearch("Seattle, WA")
+#' mod <- addWeather(mod, stationid = "GHCND:USW00024234")
 addWeather <- function(term, weather = NULL, formula = NULL, stationid = NULL, timeVar = NULL, tempVar = NULL, name = NULL) {
   
   ind <- length(term$weather)
@@ -249,6 +327,39 @@ addWeather <- function(term, weather = NULL, formula = NULL, stationid = NULL, t
 }
 
 
+#' Add a method to a "term" object
+#' 
+#' Adds an evaluation method to a "term" object. Current options are for a 
+#' change point model, Variable Base Degree Day (VBDD or PRISM) model, or a
+#' Bayesian change point model. Note that you can add multiple methods to the 
+#' same "term" with repeated calls of this function.
+#' 
+#' For the bayesian "web" method, you can modify the prior through "Mean" and 
+#' "Sd" suffixes to the parameter names. For example, for the "baseLoad" 
+#' parameter you can specify a "baseLoadMean" and "baseLoadSd" for prior 
+#' mean and standard deviation of the base load.
+#' 
+#' For the frequentist "changepoint" and "degreeday" methods, you can specify
+#' whether to generate bootstrap standard errors with se = TRUE/FALSE & the 
+#' number of bootstrap replicates with "nreps". In addition you can tweak the 
+#' L1 penalty strength by specifying "lambda"
+#' 
+#' @param term the term object to add the method.
+#' @param method the method name "changepoint", "degreeday", or "web"
+#' @param name an optional name for this method
+#' @param ... optional extra parameters for the specific methodology. 
+#' 
+#' @seealso \code{\link{newTerm}} \code{\link{addData}} \code{\link{addMethod}}
+#' 
+#' @return the term object w/ the method added
+#' 
+#' @examples
+#' stationSearch("Seattle, WA")
+#' mod <- addMethod(mod, "changepoint")
+#' mod <- addMethod(mod, "degreeday")
+#' mod <- addMethod(mod, "web", name = "normal")
+#' mod <- addMethod(mod, "web", baseLoadMean = 100, name = "higher base")
+#' mod <- addMethod(mod, "cp", se = FALSE, lambda = 20)
 addMethod <- function(term, method, name = NULL, ...) {
   
 
@@ -263,7 +374,12 @@ addMethod <- function(term, method, name = NULL, ...) {
     defaults <- list(heating = NULL, cooling = NULL, intercept = TRUE, se = TRUE, nreps = 200, parametric = FALSE, lambda = 8, selection = "L1") 
   } else if(tolower(method) %in% c("web", "bayes", "bayesian")) {
     method <- "web"
-    defaults <- list(heating = NULL, cooling = NULL, intercept = TRUE, selection = "L1", lambda = 10, baseLoad = 50, heatingBase = 55, heatingSlope = 15, coolingBase = 75, coolingSlope = 15) 
+    defaults <- list(heating = NULL, cooling = NULL, intercept = TRUE, selection = "L1", lambda = 10, 
+                     baseLoadMean = 50, baseLoadSd = 35, 
+                     heatingBaseMean = 55, heatingBaseSd = 10,
+                     heatingSlopeMean = 15, heatingSlopeSd = 10,
+                     coolingBaseMean = 75, coolingBaseSd = 15,
+                     coolingSlopeMean = 15, coolingSlopeSd = 10) 
   } else {
     stop(paste("Unrecognized Method", method))
   }
@@ -303,6 +419,16 @@ addMethod <- function(term, method, name = NULL, ...) {
 }
 
 
+#' Evaluate a term
+#' 
+#' Evaluates a "term" that has had data, weather, and method(s) added
+#' 
+#' @param term the term object to evaluate.
+#' 
+#' @seealso \code{\link{newTerm}} \code{\link{addData}} 
+#' \code{\link{addWeather}} \code{\link{addMethod}}
+#' 
+#' @return the evaluated term object
 evaluate <- function(term) {
   
   # term <- linkWeatherToData(term)
@@ -349,7 +475,19 @@ evalOne <- function(term, method, weather) {
   return(mod)
 }
 
-
+#' Extract an individual model from a fitted term
+#' 
+#' Pulls on individual model fit out of a term object. For example 
+#' if you fitted both "degreeday" and "changepoint" you can pull out 
+#' just the change point model with extractModel(mod, "cp")
+#' 
+#' @param term the term object to extract from.
+#' @param name a regex matching the name of the model to extract
+#' 
+#' @seealso \code{\link{newTerm}} \code{\link{addData}} 
+#' \code{\link{addWeather}} \code{\link{addMethod}} \code{\link{evaluate}}
+#' 
+#' @return the extracted model
 extractModel <- function(term, name) {
   models <- names(term$models)
   toSelect <- grep(name, models)
