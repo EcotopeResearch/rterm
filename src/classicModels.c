@@ -195,7 +195,7 @@ double findBestBaseTemp(double *X, double *temps, int *rows, double *energy, dou
       
     } else {
       //Else we have heating and cooling, so we need a nested loop
-      for(t2 = max(tmin2, t); t2 <= tmax2; t2 = t2 + tstep) {
+      for(t2 = max(tmin2, t - tstep * 10); t2 <= tmax2; t2 = t2 + tstep) {
         deriveVarC(temps, t, cpVarTmp, rows, 1, ndata, nweather, type);
         if(vecsum(cpVarTmp, ndata) == 0) {
           continue;
