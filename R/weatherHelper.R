@@ -390,6 +390,7 @@ stationSearch <- function(geocode = NULL, stationName = NULL, lat = NULL, lon = 
   attr(stations, "gmapsSearch") <- geocode
   
   stations <- stations[ind, ]
+  stations
 }
 
 smoothTemps <- function(dset, days = 14, var = "aveTemp") {
