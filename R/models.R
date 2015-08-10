@@ -113,7 +113,12 @@ web <- function(data, weather, controls) {
                     x = oat,
                     Y = data$dailyEnergy)
   
-  cat(writeStan(controls$intercept, heating, cooling, controls$baseLoad, controls$heatingBase, controls$heatingSlope, controls$coolingBase, controls$coolingSlope), sep = "\n")
+  cat(writeStan(controls$intercept, heating, cooling, 
+                controls$baseLoadMean, controls$baseLoadSd,
+                controls$heatingBaseMean, controls$heatingBaseSd,
+                controls$heatingSlopeMean, controls$heatingSlopeSd,
+                controls$coolingBaseMean, controls$coolingBaseSd,
+                controls$coolingSlopeMean, controls$coolingSlopeSd), sep = "\n")
   
   fitx <- rstan::stan(model_code = paste(writeStan(controls$intercept, heating, cooling), collapse = ""), 
               data = stan_data, iter = 500, chains = 4)

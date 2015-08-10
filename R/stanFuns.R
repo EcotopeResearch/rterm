@@ -2,7 +2,12 @@
 
 
 
-writeStan <- function(intercept = TRUE, heating = TRUE, cooling = FALSE, baseLoad = 50, heatingBase = 55, heatingSlope = 15, coolingBase = 75, coolingSlope = 15) {
+writeStan <- function(intercept = TRUE, heating = TRUE, cooling = FALSE, 
+                      baseLoadMean = 50, baseLoadSd = 35,
+                      heatingBaseMean = 55, heatingBaseSd = 10,
+                      heatingSlopeMean = 15, heatingSlopeSd = 10, 
+                      coolingBaseMean = 75, coolingBaseSd = 10,
+                      coolingSlopeMean = 15, coolingSlopeSd = 10) {
   # Data
   stanx <- c("data {",
              "  int<lower=0> N;",
@@ -31,17 +36,17 @@ writeStan <- function(intercept = TRUE, heating = TRUE, cooling = FALSE, baseLoa
   stanx <- c(stanx, "  real mu[N];")
   if(intercept) {
     rate <- .03
-    shape <- baseLoad * rate
+    shape <- baseLoadMean * rate
     # stanx <- c(stanx, paste0("  baseLoad ~ gamma(", shape, ", ", rate, ");"))
-    stanx <- c(stanx, paste0("  baseLoad ~ normal(", baseLoad, ", 500);"))
+    stanx <- c(stanx, paste0("  baseLoad ~ normal(", baseLoadMean, ", ", baseLoadSd, ");"))
   }
   if(heating) {
-    stanx <- c(stanx, paste0("  heatingSlope ~ normal(", heatingSlope, ",10);"))
-    stanx <- c(stanx, "  heatingBase ~ normal(55,8);")
+    stanx <- c(stanx, paste0("  heatingSlope ~ normal(", heatingSlopeMean, ",", heatingSlopeSd, ");"))
+    stanx <- c(stanx, paste0("  heatingBase ~ normal(", heatingBaseMean, ",", heatingBaseSd, ");"))
   }
   if(cooling) {
-    stanx <- c(stanx, paste0("  coolingSlope ~ normal(", coolingSlope, ",10);"))
-    stanx <- c(stanx, "  coolingBase ~ normal(65,8);")
+    stanx <- c(stanx, paste0("  coolingSlope ~ normal(", coolingSlopeMean, ",", coolingSlopeSd, ");"))
+    stanx <- c(stanx, paste0("  coolingBase ~ normal(", coolingBaseMean, ",", coolingBaseSd, ");"))
   }
   stanx <- c(stanx, "  sigma ~ cauchy(0,5);")
   stanx <- c(stanx, "  for (n in 1:N)")
