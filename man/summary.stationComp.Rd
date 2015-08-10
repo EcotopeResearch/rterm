@@ -4,7 +4,7 @@
 \alias{summary.stationComp}
 \title{Summarize a comparison of GHCN weather stations}
 \usage{
-\method{summary}{stationComp}(sc)
+summary.stationComp(sc, days = 14)
 }
 \arguments{
 \item{sc}{stationComp object as returned by \code{\link{stationCompare}}}

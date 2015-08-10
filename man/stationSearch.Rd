@@ -4,15 +4,14 @@
 \alias{stationSearch}
 \title{Search for GHCN Weather Stations}
 \usage{
-stationSearch(geocode = NULL, name = NULL, lat = NULL, lon = NULL,
-  nClosest = 5, country = NULL, state = NULL)
+stationSearch(geocode = NULL, stationName = NULL, lat = NULL,
+  lon = NULL, nClosest = 5, country = NULL, state = NULL,
+  elevThreshold = NULL)
 }
 \arguments{
 \item{geocode}{The default input. A string that will be sent to
-Google Maps to get a latitude/longitude.}
-
-\item{name}{A name to search for in the list of station names.
-Evaluated as a regular expression.}
+Google Maps to get a latitude/longitude. This must be loaded into
+your R session as "google_key"}
 
 \item{lat}{Latitude}
 
@@ -25,6 +24,9 @@ on latitude & longitude. Example: nClosest = 10 will show the
 \item{country}{an optional specification of country}
 
 \item{state}{an optional specification of us state}
+
+\item{name}{A name to search for in the list of station names.
+Evaluated as a regular expression.}
 }
 \value{
 a data frame with information about the relevant stations found.
@@ -32,7 +34,7 @@ a data frame with information about the relevant stations found.
  include station distance in miles from the searched location.
 }
 \description{
-Search by station name or latitude/longitude for GHCN weather stations
+Search by location name, station name or latitude/longitude for GHCN weather stations
 that can be loaded with \code{\link{read.ghcn}}. Note that you need to
 acquire a \href{https://developers.google.com/maps/documentation/geocoding/?hl=en_US#api_key}{Google Maps API key} for the default functionality, which is to
 search for stations close to a latitude/longitude as returned by a Google

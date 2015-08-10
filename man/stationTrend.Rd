@@ -4,7 +4,7 @@
 \alias{stationTrend}
 \title{Look at a time trend within a station, for example the past 5 years}
 \usage{
-stationTrend(weather, var = "aveTemp", days = 60, type = "relative")
+stationTrend(weather, var = "aveTemp", days = 60, type = "actual")
 }
 \arguments{
 \item{weather}{a weather dataset returned by read.ghcn}

@@ -4,7 +4,7 @@
 \alias{residsPlot}
 \title{Plot Residuals from a Change Point Linear Model}
 \usage{
-residsPlot(x, ...)
+residsPlot(x)
 }
 \arguments{
 \item{x}{a 'cplm' object}
