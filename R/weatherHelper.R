@@ -57,6 +57,10 @@ read.noaa <- function(table, param = NULL, quietly = TRUE) {
   
   if(!quietly) print(paste("Attempting to query:", urlx))
   tmp <- httr::GET(urlx, httr::add_headers(token = noaa_key))
+  if(!quietly)  {
+    print(httr::content(tmp))
+    print(noaa_key)
+  }
   jsonlite::fromJSON(httr::content(tmp, "text"))$results
 }
 
