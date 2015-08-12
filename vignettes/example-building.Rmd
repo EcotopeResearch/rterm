@@ -1,0 +1,121 @@
+---
+title: "An Example Building with rterm"
+author: "Mike Logsdon"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{An Example Building with rterm}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+This vignette using a package internal dataset of a Seattle area commercial building to explore the current capabilities of the rterm package.
+
+## Getting started
+
+First we need to load the data and make sure that we have a noaa and google API key to automatically get weather data. Pretending that you've already loaded API keys...
+
+```{r}
+library(rterm)
+library(dplyr)
+data(commercial)
+```
+
+```{r, echo=FALSE}
+google_key <- "AIzaSyBYJbN25Bg_6UbL_FuoyMcv4GaH8nE7Yq4"
+noaa_key <- "mgPWFcAfmzIrHjXlacsksLXkhajnyFDp"
+```
+
+## Finding Weather
+
+Let's go about the standard method for finding weather. I actually know from the start that we want Sea-Tac for this, but here's the process anyway.
+
+```{r, fig.height=7,fig.width=9}
+stations <- stationSearch("Seattle, WA")
+stations
+comp <- stationCompare(stations, "2012-01-01", "2015-07-01")
+stationMap(comp)
+```
+
+This particular building is a bit south of the Seattle label on the map, so we can disqualify Sand Point. Once again Boeing Field shows up as being warmer than the other weather stations, and since it's not in the SoDo/Georgetown area we can disqualify Boeing Field as well. Kent is missing some data. Either Renton or Sea-Tac are logical choices here, although since we're going to project onto archival weather data let's use Sea-Tac: those records date back to 1948.
+
+## Fit the model
+
+Let's start by just straight ahead fitting to all the data. One thing to point out here is that the consumption is total kWh across the interval, rather than daily kWh. Adding the square footage into the newTerm function then triggers the code to work in EUI, which is Energy Use Intensity as kBtu/ sq ft / year. 
+
+Below we view the dataset to see what it looks like, then fit a change point model and variable base degree day model using Sea-Tac International Airport weather data. Change point means linear in average outdoor temperature; degree day means linear in heating degree days to some base. They are closely related but not exactly the same.
+
+```{r, fig.height=5,fig.width=7}
+head(commercial)
+mod <- newTerm("Seattle Commercial Building", sqft = 36000) %>%
+  addData(commercial, kWh ~ Start.Date + End.Date, daily = FALSE) %>%
+  addWeather(stationid = "GHCND:USW00024233", name = "Sea-Tac") %>%
+  addMethod("cp") %>% addMethod("dd") %>%
+  evaluate()
+mod
+plot(mod)
+```
+
+The plot makes it look like we have some goofy, low-usage months! What's up with that? The best way to investigate any question along the lines of what's up with that is with residuals.
+
+```{r, fig.height=5,fig.width=7}
+plot(mod, "resids")
+```
+
+Looks like those goofy months are the first two months. In this case I believe the building was still filling up, so we can safely discard those months to investigate the energy use signature of this building when fully occupied.
+
+## Fit the model again, but without the ramp-up
+
+```{r, fig.height=5,fig.width=7}
+mod <- addData(mod, commercial[-c(1:2), ], kWh ~ Start.Date + End.Date, daily = FALSE)
+mod <- evaluate(mod)
+mod
+plot(mod)
+plot(mod, "resids")
+```
+
+This looks better, but now it appears as though the largest residual usage occurred near the start of the dataset. Typically one would want to research this a bit more, but my understanding is that this is another effect of the building becoming fully occupied -- that later operational changes altered the way in which energy was used. To project how the building will operate going forward, let's discard the first five months of occupancy.
+
+```{r, fig.height=5,fig.width=7}
+mod <- addData(mod, commercial[-c(1:5), ], kWh ~ Start.Date + End.Date, daily = FALSE)
+mod <- evaluate(mod)
+mod
+plot(mod)
+```
+
+This looks good! It appears as though operation and behavior stabilized after about five months. Since the typical exercise is to project energy use going forward we are somewhat justified in discarding the initial data, although in general be wary of when people say "that data didn't look as expected, so we got rid of it."
+
+## Individual Models
+
+Note that in the main "term" model we fit the consumption to the data with two different methods, a change point and a variable base degree day. The summaries and plots above on the "term" model object necessarily compare the two at a high level. We can also extract an individual model and look at its results in more detail.
+
+Starting with change point...
+
+```{r}
+cp <- extractModel(mod, "cp")
+summary(cp)
+plot(cp)
+bootstraps(cp)
+```
+
+Here we can see the estimated model coefficients, along with estimated uncertainty in each coefficient. This is often helpful, especially in the case that parameters of the fit are relevant (imagine comparing the balance point and/or heating slope before and after some retrofit).
+
+We can do the same for the degree day... There's not really a nice plot for degree day because it's so weird mathematically. With change point, a difference in the "balance point" manifests as putting the elbow in a different location. With degree day, a difference in the "balance point" manifests itself as a whole new x-variable for the x-axis of the plot. 
+
+
+```{r}
+dd <- extractModel(mod, "dd")
+summary(dd)
+bootstraps(dd)
+```
+
+
+## Projecting onto archival weather
+
+An alternative to TMY3 weather for making generalizations is to simply project the relationship found in the observed data to archival weather. Right now this is implemented for the change point model, mainly because there's a trick to get monthly weather averages. It would be unbelievably time consuming to try to get 80 years worth of daily weather data from the NOAA API and derive degree days to some arbitrary base. My observation has been that -- in terms of just fitted values -- the change point and degree day are pretty similar.
+
+```{r}
+projection(cp, "GHCND:USW00024233")
+```
+
+
