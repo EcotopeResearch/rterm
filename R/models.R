@@ -551,6 +551,10 @@ annual.tlm <- function(x, bounds = TRUE, eui = FALSE) {
   toUse <- x$data$dateStart < newMaxDate
   x$data <- x$data[toUse, ]
   
+  print(paste("Annual Average Using Data from", 
+              min(x$data$dateStart),
+              max(x$data$dateEnd)))
+  
   coefs <- coef(x, silent = TRUE)
   ann <- annOne(x$data, coefs, nYears, eui)
   
@@ -572,6 +576,7 @@ annual.tlm <- function(x, bounds = TRUE, eui = FALSE) {
 annOne <- function(data, coefs, nYears, eui = FALSE) {
   ann <- c()
   annFracs <- c()
+  total <- 0
   if(!is.na(coefs['baseLoad'])) {
     data$base <- coefs['baseLoad']
     if(eui) {
@@ -579,6 +584,7 @@ annOne <- function(data, coefs, nYears, eui = FALSE) {
     } else {
       ann <- c(ann, "Base Load" = sum(data$base * data$days) / nYears)
     }
+    total <- total + as.numeric(ann['Base Load'])
   }
   if(!is.null(data$xHeating)) {
     data$heating <- data$xHeating * coefs['heatingSlope']
@@ -587,6 +593,7 @@ annOne <- function(data, coefs, nYears, eui = FALSE) {
     } else {
       ann <- c(ann, "Heating" = sum(data$heating * data$days) / nYears)  
     }
+    total <- total + as.numeric(ann['Heating'])
   }
   if(!is.null(data$xCooling)) {
     data$cooling <- data$xCooling * coefs['coolingSlope']
@@ -595,16 +602,18 @@ annOne <- function(data, coefs, nYears, eui = FALSE) {
     } else {
       ann <- c(ann, "Cooling" = sum(data$cooling * data$days) / nYears)  
     } 
+    total <- total + as.numeric(ann['Cooling'])
   }
+  ann <- c(ann, "Fitted Total" = total)
   
   if(!is.na(ann['Base Load'])) {
-    annFracs <- c(annFracs, "Base.Load.Frac" = as.numeric(ann['Base Load']) / sum(ann))
+    annFracs <- c(annFracs, "Base.Load.Frac" = as.numeric(ann['Base Load']) / as.numeric(ann['Fitted Total']))
   }
   if(!is.na(ann['Heating'])) {
-    annFracs <- c(annFracs, "Heating.Frac" = as.numeric(ann['Heating']) / sum(ann))
+    annFracs <- c(annFracs, "Heating.Frac" = as.numeric(ann['Heating']) / as.numeric(ann['Fitted Total']))
   }
   if(!is.na(ann['Cooling'])) {
-    annFracs <- c(annFracs, "Cooling.Frac" = as.numeric(ann['Cooling']) / sum(ann))
+    annFracs <- c(annFracs, "Cooling.Frac" = as.numeric(ann['Cooling']) / as.numeric(ann['Fitted Total']))
   }
   
   c(ann, annFracs)
@@ -653,18 +662,20 @@ plot.term <- function(term, xvar = NULL) {
     } else {
       p <- p + ggplot2::geom_line(ggplot2::aes(x = temp, y = fitted))
     }
-  } else if(xvar == "time") {
+  } else if(tolower(xvar) == "raw") {
     p <- ggplot2::ggplot(abc) + ggplot2::theme_bw() + 
-      ggplot2::geom_point(ggplot2::aes(x = dateStart, y = dailyEnergy)) + 
+      ggplot2::geom_line(ggplot2::aes(x = dateStart, y = dailyEnergy)) + 
       ggplot2::ggtitle(paste(attr(term, "name", exact = TRUE), "Energy over Time")) + 
       ggplot2::xlab("Date") +
-      ggplot2::ylab(yvar)
-    if(nmodels > 1) {
-      p <- p + ggplot2::geom_line(ggplot2::aes(x = dateStart, y = fitted, col = type))
-    } else {
-      p <- p + ggplot2::geom_line(ggplot2::aes(x = dateStart, y = fitted))
-    }
-  } else if(xvar == "resids") {
+      ggplot2::ylab(yvar) +
+      ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
+      ggplot2::scale_x_date(breaks = scales::date_breaks(width = "3 months"), labels = scales::date_format("%b %Y"))
+#     if(nmodels > 1) {
+#       p <- p + ggplot2::geom_line(ggplot2::aes(x = dateStart, y = fitted, col = type))
+#     } else {
+#       p <- p + ggplot2::geom_line(ggplot2::aes(x = dateStart, y = fitted))
+#     }
+  } else if(tolower(xvar) == "resids") {
     p <- ggplot2::ggplot(abc) + ggplot2::theme_bw() + 
       ggplot2::ggtitle(paste(attr(term, "name", exact = TRUE), "Residuals over Time")) + 
       ggplot2::xlab("Date") +
@@ -679,6 +690,19 @@ plot.term <- function(term, xvar = NULL) {
       p <- p + ggplot2::geom_point(ggplot2::aes(x = dateStart, y = resid)) +
         ggplot2::geom_smooth(ggplot2::aes(x = dateStart, y = resid), se = FALSE)
     }    
+  } else if(tolower(xvar) == "time") {
+    p <- ggplot2::ggplot(abc) + ggplot2::theme_bw() + 
+      ggplot2::geom_line(ggplot2::aes(x = dateStart, y = dailyEnergy)) + 
+      ggplot2::ggtitle(paste(attr(term, "name", exact = TRUE), "Energy over Time")) + 
+      ggplot2::xlab("Date") +
+      ggplot2::ylab(yvar) +
+      ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
+      ggplot2::scale_x_date(breaks = scales::date_breaks(width = "3 months"), labels = scales::date_format("%b %Y"))
+        if(nmodels > 1) {
+          p <- p + ggplot2::geom_line(ggplot2::aes(x = dateStart, y = fitted, col = type))
+        } else {
+          p <- p + ggplot2::geom_line(ggplot2::aes(x = dateStart, y = fitted))
+        }
   }
   
   p

@@ -53,6 +53,7 @@ mod <- newTerm("Seattle Commercial Building", sqft = 36000) %>%
   addMethod("cp") %>% addMethod("dd") %>%
   evaluate()
 mod
+plot(mod, "raw")
 plot(mod)
 ```
 
@@ -80,10 +81,17 @@ This looks better, but now it appears as though the largest residual usage occur
 mod <- addData(mod, commercial[-c(1:5), ], kWh ~ Start.Date + End.Date, daily = FALSE)
 mod <- evaluate(mod)
 mod
+plot(mod, "raw")
 plot(mod)
 ```
 
 This looks good! It appears as though operation and behavior stabilized after about five months. Since the typical exercise is to project energy use going forward we are somewhat justified in discarding the initial data, although in general be wary of when people say "that data didn't look as expected, so we got rid of it."
+
+For disaggregating the total energy into temperature dependent and non-temperature dependent components, there is a function call "annual". Currently this does so for the largest chunk of full years within the dataset. This is a disaggregation of the observed data. Note that the degree day model usually does a better job of this than the change point model.
+
+```{r}
+annual(mod)
+```
 
 ## Individual Models
 
