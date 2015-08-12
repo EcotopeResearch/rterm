@@ -824,6 +824,76 @@ summary.tlm <- function(object, ...) {
   }
 }
 
+projection <- function(mod, stationid) {
+  if(!inherits(mod, "cplm") & !inherits(mod, "web")) {
+    stop("First argument must be a model of class 'cplm' or 'web'")
+  }
+  if(!inherits(stationid, "character")) {
+    stop("Second argument must be ghcn station id as character")
+  }
+  
+  # Get as much weather as possible
+  stationTmp <- rterm::stations[stations$id == stationid, ]
+  if(!nrow(stationTmp)) {
+    stop(paste("Could not find station id", stationid))
+  }
+  mindate <- stationTmp$mindate
+  weather <- read.ghcn.monthly(stationid, mindate, lubridate::today())
+  weather$year <- lubridate::year(weather$date)
+  weather$missing <- is.na(weather$aveTemp)
+  missing <- aggregate(missing ~ year, data = weather, FUN = sum)
+  missingYears <- missing$year[missing$missing > 0]
+  weather <- weather[!(weather$year %in% missingYears), ]
+  
+  
+  projections <- do.call('rbind', lapply(unique(weather$year), function(y) {
+    wt <- weather[weather$year == y, ]
+    euis <- sapply(1:nrow(mod$bootstraps), function(i) {
+      mean(sapply(wt$aveTemp, function(t) {
+        if(!is.null(mod$bootstraps$baseLoad)) {
+          tmp <- mod$bootstraps$baseLoad[i]
+        } else {
+          tmp <- 0
+        }
+        
+        if(!is.null(mod$bootstraps$heatingBase)) {
+          if(t < mod$bootstraps$heatingBase[i]) {
+            tmp <- tmp + mod$bootstraps$heatingSlope[i] * (mod$bootstraps$heatingBase[i] - t)
+          }
+        }
+        
+        if(!is.null(mod$bootstraps$coolingBase)) {
+          if(t > mod$bootstraps$coolingBase[i]) {
+            tmp <- tmp + mod$bootstraps$coolingSlope[i] * (t - mod$bootstraps$coolingBase[i])
+          }
+        }
+        tmp
+      }))
+    })
+    data.frame("year" = y, "euis" = euis)
+  }))
+  
+  # Collapse into 95% bounds
+  bounds <- do.call('rbind', by(projections, projections$year, function(x) {
+    data.frame("year" = x$year[1],
+               "mean" = mean(x$euis),
+               "lower2.5" = as.numeric(quantile(x$euis, .025)),
+               "upper97.5" = as.numeric(quantile(x$euis, .975)))
+  }))
+  bounds <- bounds[bounds$year < lubridate::year(lubridate::today()), ]
+  
+  mod2 <- ggplot(bounds) + theme_bw() + 
+    geom_point(aes(x = year, y = mean)) + 
+    geom_errorbar(aes(x = year, ymin = lower2.5, ymax = upper97.5)) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    scale_x_continuous(breaks = seq(min(bounds$year), max(bounds$year), 2)) +
+    xlab("") + ylab("Annual Energy Use Intensity (EUI) and 95% Interval") +
+    ggtitle("Probabilistic Projected EUI from Archival Weather")
+  mod2
+  
+  
+}
+
 
 bootstraps <- function(mod) {
   if(inherits(mod, "term")) {
