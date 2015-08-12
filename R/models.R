@@ -882,13 +882,13 @@ projection <- function(mod, stationid) {
   }))
   bounds <- bounds[bounds$year < lubridate::year(lubridate::today()), ]
   
-  mod2 <- ggplot(bounds) + theme_bw() + 
-    geom_point(aes(x = year, y = mean)) + 
-    geom_errorbar(aes(x = year, ymin = lower2.5, ymax = upper97.5)) +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
-    scale_x_continuous(breaks = seq(min(bounds$year), max(bounds$year), 2)) +
-    xlab("") + ylab("Annual Energy Use Intensity (EUI) and 95% Interval") +
-    ggtitle("Probabilistic Projected EUI from Archival Weather")
+  mod2 <- ggplot2::ggplot(bounds) + ggplot2::theme_bw() + 
+    ggplot2::geom_point(ggplot2::aes(x = year, y = mean)) + 
+    ggplot2::geom_errorbar(ggplot2::aes(x = year, ymin = lower2.5, ymax = upper97.5)) +
+    ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
+    ggplot2::scale_x_continuous(breaks = seq(min(bounds$year), max(bounds$year), 2)) +
+    ggplot2::xlab("") + ggplot2::ylab("Annual Energy Use Intensity (EUI) and 95% Interval") +
+    ggplot2::ggtitle("Probabilistic Projected EUI from Archival Weather")
   mod2
   
   
