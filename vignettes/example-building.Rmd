@@ -124,7 +124,7 @@ An alternative to TMY3 weather for making generalizations is to simply project t
 
 There's a function called "projection" that returns a projection object that you can print or plot. Here's how it works:
 
-```{r}
+```{r, fig.width=7,fig.height=5}
 p <- projection(cp, "GHCND:USW00024233")
 p
 print(p, nYears = 20)

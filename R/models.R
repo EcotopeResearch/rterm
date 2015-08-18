@@ -977,7 +977,7 @@ plot.projection <- function(projection, movingAverage = FALSE, total = TRUE) {
   mod2 <- ggplot2::ggplot(bounds) + ggplot2::theme_bw() + 
     ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
     ggplot2::scale_x_continuous(breaks = seq(min(bounds$year), max(bounds$year), 2)) +
-    ggplot2::xlab("") + ggplot2::ylab(paste("Annual", yvar, "and 95% Interval")) +
+    ggplot2::xlab("") + ggplot2::ylab(paste(yvar, "and 95% Interval")) +
     ggplot2::ggtitle(paste("Probabilistic Projected", yvar, "from Archival Weather"))
   
   if(total) {
