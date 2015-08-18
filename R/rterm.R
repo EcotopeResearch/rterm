@@ -84,6 +84,14 @@ addData <- function(term, data, formula = NULL, interval = NULL, energyVar = NUL
     mf <- model.frame(formula, data)
     y <- model.response(mf)
     term$data <- data.frame(mf)
+    eName <- tolower(names(term$data)[1])
+    if(length(grep("gas", eName)) | length(grep("therm", eName))) {
+      isGas <- TRUE
+      attr(term, "gas") <- TRUE
+    } else {
+      isGas <- FALSE
+      attr(term, "gas") <- FALSE
+    }
     names(term$data)[1] <- "energy"
     
     # We're going to coerce POSIX times to dates... note that 
@@ -91,6 +99,15 @@ addData <- function(term, data, formula = NULL, interval = NULL, energyVar = NUL
     term$data <- data.frame(lapply(term$data, function(x) {
       if(inherits(x, "POSIXt")) {
         as.Date(x)
+      } else if(inherits(x, "factor") | inherits(x, "character")) {
+        tmp <- lubridate::mdy(x)
+        if(sum(!is.na(tmp)) == 0) {
+          tmp <- lubridate::ymd(x)
+          if(sum(!is.na(tmp)) == 0) {
+            warning("Could not parse the dates. Set them as either 2015-05-20 of 5/20/2015")
+          }
+        }
+        as.Date(tmp)
       } else {
         x
       }
@@ -195,7 +212,12 @@ addData <- function(term, data, formula = NULL, interval = NULL, energyVar = NUL
   } else {
     term$data$dailyEnergy <- term$data$energy / term$data$days
     if(!is.null(attr(term, "sqft"))) {
-      term$data$dailyEnergy <- term$data$dailyEnergy * 3.412 / attr(term, "sqft") * 365
+      if(isGas) {
+        term$data$dailyEnergy <- term$data$dailyEnergy * 100 / attr(term, "sqft") * 365
+      } else {
+        term$data$dailyEnergy <- term$data$dailyEnergy * 3.412 / attr(term, "sqft") * 365
+      }
+      
     }
   }
   

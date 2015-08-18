@@ -625,6 +625,8 @@ plot.term <- function(term, xvar = NULL) {
   }
   if(!is.null(attr(term, "sqft"))) {
     yvar <- "Annualized EUI"
+  } else if(attr(term, "gas")) {
+    yvar <- "Daily Therms"
   } else {
     yvar <- "Daily kWh"
   }
@@ -723,6 +725,8 @@ plot.tlm <- function(x, fit = NULL) {
   
   if(!is.null(attr(x, "sqft"))) {
     yvar <- "Annualized EUI"
+  } else if(attr(x, "gas")) {
+    yvar <- "Daily Therms"
   } else {
     yvar <- "Daily kWh"
   }
@@ -857,11 +861,12 @@ projection <- function(mod, stationid) {
   }
   
   # Get as much weather as possible
-  stationTmp <- rterm::stations[stations$id == stationid, ]
+  stationTmp <- rterm::stations[rterm::stations$id == stationid, ]
   if(!nrow(stationTmp)) {
     stop(paste("Could not find station id", stationid))
   }
-  mindate <- stationTmp$mindate
+  mindate <- as.Date(stationTmp$mindate)
+  mindate <- lubridate::ceiling_date(mindate, "year")
   weather <- read.ghcn.monthly(stationid, mindate, lubridate::today())
   weather$year <- lubridate::year(weather$date)
   weather$missing <- is.na(weather$aveTemp)
@@ -872,51 +877,133 @@ projection <- function(mod, stationid) {
   
   projections <- do.call('rbind', lapply(unique(weather$year), function(y) {
     wt <- weather[weather$year == y, ]
-    euis <- sapply(1:nrow(mod$bootstraps), function(i) {
-      mean(sapply(wt$aveTemp, function(t) {
+    euis <- do.call('rbind', lapply(1:nrow(mod$bootstraps), function(i) {
+      tmp <- do.call('rbind', lapply(wt$aveTemp, function(t) {
         if(!is.null(mod$bootstraps$baseLoad)) {
-          tmp <- mod$bootstraps$baseLoad[i]
+          baseLoad <- mod$bootstraps$baseLoad[i]
+          tmp <- baseLoad
         } else {
           tmp <- 0
+          baseLoad <- 0
         }
         
+        heating <- 0
         if(!is.null(mod$bootstraps$heatingBase)) {
           if(t < mod$bootstraps$heatingBase[i]) {
-            tmp <- tmp + mod$bootstraps$heatingSlope[i] * (mod$bootstraps$heatingBase[i] - t)
+            heating <- mod$bootstraps$heatingSlope[i] * (mod$bootstraps$heatingBase[i] - t)
+            tmp <- tmp + heating
           }
-        }
+        } 
         
+        cooling <- 0
         if(!is.null(mod$bootstraps$coolingBase)) {
           if(t > mod$bootstraps$coolingBase[i]) {
-            tmp <- tmp + mod$bootstraps$coolingSlope[i] * (t - mod$bootstraps$coolingBase[i])
+            cooling <- mod$bootstraps$coolingSlope[i] * (t - mod$bootstraps$coolingBase[i])
+            tmp <- tmp + cooling
           }
         }
-        tmp
+        c("baseLoad" = baseLoad, "heating" = heating, "cooling" = cooling, "total" = tmp)
       }))
-    })
-    data.frame("year" = y, "euis" = euis)
+      apply(tmp, 2, mean)
+    }))
+    euis <- as.data.frame(euis)
+    data.frame("year" = y, "baseLoad" = euis$baseLoad,
+               "heating" = euis$heating, "cooling" = euis$cooling,
+               "total" = euis$total)
   }))
   
   # Collapse into 95% bounds
   bounds <- do.call('rbind', by(projections, projections$year, function(x) {
-    data.frame("year" = x$year[1],
-               "mean" = mean(x$euis),
-               "lower2.5" = as.numeric(quantile(x$euis, .025)),
-               "upper97.5" = as.numeric(quantile(x$euis, .975)))
+    do.call('rbind', lapply(2:5, function(k) {
+      z <- x[, k]
+      data.frame("year" = x$year[1],
+                 "variable" = names(x)[k],
+                 "mean" = mean(z),
+                 "lower2.5" = as.numeric(quantile(z, .025)),
+                 "upper97.5" = as.numeric(quantile(z, .975)))
+    }))
   }))
   bounds <- bounds[bounds$year < lubridate::year(lubridate::today()), ]
   
+  toReturn <- list("mod" = mod, "bounds" = bounds)
+  class(toReturn) <- "projection"
+  toReturn
+
+}
+
+
+
+print.projection <- function(projection, nYears = 30) {
+  rows <- projection$bounds$year >= (max(projection$bounds$year) - nYears)
+  toPrint <- aggregate(cbind(mean, lower2.5, upper97.5) ~ variable, 
+            FUN = mean,
+            data = projection$bounds[rows, ])
+  toPrint <- toPrint[toPrint$mean > 0, ]
+  print(paste(nYears, "Year Average:"))
+  print(paste(length(unique(projection$bounds$year[rows])), "years of full weather data"))
+  print(toPrint)
+}
+
+plot.projection <- function(projection, movingAverage = FALSE, total = TRUE) {
+  bounds <- projection$bounds
+  
+  if(movingAverage) {
+    bounds <- do.call('rbind', by(bounds, bounds$variable, function(x) {
+      x <- plyr::arrange(x, -year)
+      x$ma <- sapply(1:nrow(x), function(i) {
+        mean(x$mean[1:i])
+      })
+      x
+    }))
+  }
+  
+  if(total) {
+    bounds <- bounds[bounds$variable == "total", ]
+  } else {
+    bounds <- bounds[bounds$variable %in% c("heating", "cooling"), ]
+    tmp <- aggregate(mean ~ variable, data = bounds, FUN = mean)
+    vars <- tmp$variable[tmp$mean > 0]
+    bounds <- bounds[bounds$variable %in% vars, ]
+  }
+  
+  if(!is.null(attr(mod, "sqft"))) {
+    yvar <- "Annualized EUI"
+  } else if(attr(mod, "gas")) {
+    yvar <- "Daily Therms"
+  } else {
+    yvar <- "Daily kWh"
+  }
+  
   mod2 <- ggplot2::ggplot(bounds) + ggplot2::theme_bw() + 
-    ggplot2::geom_point(ggplot2::aes(x = year, y = mean)) + 
-    ggplot2::geom_errorbar(ggplot2::aes(x = year, ymin = lower2.5, ymax = upper97.5)) +
     ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
     ggplot2::scale_x_continuous(breaks = seq(min(bounds$year), max(bounds$year), 2)) +
-    ggplot2::xlab("") + ggplot2::ylab("Annual Energy Use Intensity (EUI) and 95% Interval") +
-    ggplot2::ggtitle("Probabilistic Projected EUI from Archival Weather")
+    ggplot2::xlab("") + ggplot2::ylab(paste("Annual", yvar, "and 95% Interval")) +
+    ggplot2::ggtitle(paste("Probabilistic Projected", yvar, "from Archival Weather"))
+  
+  if(total) {
+    mod2 <- mod2 +ggplot2::geom_point(ggplot2::aes(x = year, y = mean)) + 
+      ggplot2::geom_errorbar(ggplot2::aes(x = year, ymin = lower2.5, ymax = upper97.5))
+    if(movingAverage) {
+      mod2 <- mod2 + ggplot2::geom_line(ggplot2::aes(x = year, y = ma), linetype = "dashed")
+    }
+  } else {
+    mod2 <- mod2 +ggplot2::geom_point(ggplot2::aes(x = year, y = mean, col = variable)) + 
+      ggplot2::geom_errorbar(ggplot2::aes(x = year, ymin = lower2.5, ymax = upper97.5, col = variable)) +
+      ggplot2::scale_colour_discrete(name = "Type")
+    if(movingAverage) {
+      mod2 <- mod2 + ggplot2::geom_line(ggplot2::aes(x = year, y = ma, col = variable), linetype = "dashed")
+    }
+  }
+  
   mod2
   
   
 }
+
+# ggplot(bounds[bounds$variable != "total" & bounds$variable != "baseLoad", ]) + theme_bw() + 
+#   geom_point(aes(year, mean, col = variable)) +
+#   geom_errorbar(aes(year, ymin = lower2.5, ymax = upper97.5, col = variable))
+
 
 
 bootstraps <- function(mod) {
