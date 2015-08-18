@@ -852,10 +852,10 @@ summary.tlm <- function(object, ...) {
   }
 }
 
-projection <- function(mod, stationid) {
-  if(!inherits(mod, "cplm") & !inherits(mod, "web")) {
-    stop("First argument must be a model of class 'cplm' or 'web'")
-  }
+projection <- function(mod, stationid, nYears = 20) {
+#   if(!inherits(mod, "cplm") & !inherits(mod, "web")) {
+#     stop("First argument must be a model of class 'cplm' or 'web'")
+#   }
   if(!inherits(stationid, "character")) {
     stop("Second argument must be ghcn station id as character")
   }
@@ -865,20 +865,89 @@ projection <- function(mod, stationid) {
   if(!nrow(stationTmp)) {
     stop(paste("Could not find station id", stationid))
   }
-  mindate <- as.Date(stationTmp$mindate)
-  mindate <- lubridate::ceiling_date(mindate, "year")
-  weather <- read.ghcn.monthly(stationid, mindate, lubridate::today())
-  weather$year <- lubridate::year(weather$date)
-  weather$missing <- is.na(weather$aveTemp)
-  missing <- aggregate(missing ~ year, data = weather, FUN = sum)
-  missingYears <- missing$year[missing$missing > 0]
-  weather <- weather[!(weather$year %in% missingYears), ]
   
   
-  projections <- do.call('rbind', lapply(unique(weather$year), function(y) {
-    wt <- weather[weather$year == y, ]
-    euis <- do.call('rbind', lapply(1:nrow(mod$bootstraps), function(i) {
-      tmp <- do.call('rbind', lapply(wt$aveTemp, function(t) {
+  if(inherits(mod, "cplm") | inherits(mod, "web")) {
+    mindate <- as.Date(stationTmp$mindate)
+    mindate <- lubridate::ceiling_date(mindate, "year")
+    weather <- read.ghcn.monthly(stationid, mindate, lubridate::today())
+    weather$year <- lubridate::year(weather$date)
+    weather$missing <- is.na(weather$aveTemp)
+    missing <- aggregate(missing ~ year, data = weather, FUN = sum)
+    missingYears <- missing$year[missing$missing > 0]
+    weather <- weather[!(weather$year %in% missingYears), ]
+    
+    
+    projections <- do.call('rbind', lapply(unique(weather$year), function(y) {
+      wt <- weather[weather$year == y, ]
+      euis <- do.call('rbind', lapply(1:nrow(mod$bootstraps), function(i) {
+        tmp <- do.call('rbind', lapply(wt$aveTemp, function(t) {
+          if(!is.null(mod$bootstraps$baseLoad)) {
+            baseLoad <- mod$bootstraps$baseLoad[i]
+            tmp <- baseLoad
+          } else {
+            tmp <- 0
+            baseLoad <- 0
+          }
+          
+          heating <- 0
+          if(!is.null(mod$bootstraps$heatingBase)) {
+            if(t < mod$bootstraps$heatingBase[i]) {
+              heating <- mod$bootstraps$heatingSlope[i] * (mod$bootstraps$heatingBase[i] - t)
+              tmp <- tmp + heating
+            }
+          } 
+          
+          cooling <- 0
+          if(!is.null(mod$bootstraps$coolingBase)) {
+            if(t > mod$bootstraps$coolingBase[i]) {
+              cooling <- mod$bootstraps$coolingSlope[i] * (t - mod$bootstraps$coolingBase[i])
+              tmp <- tmp + cooling
+            }
+          }
+          c("baseLoad" = baseLoad, "heating" = heating, "cooling" = cooling, "total" = tmp)
+        }))
+        apply(tmp, 2, mean)
+      }))
+      euis <- as.data.frame(euis)
+      data.frame("year" = y, "baseLoad" = euis$baseLoad,
+                 "heating" = euis$heating, "cooling" = euis$cooling,
+                 "total" = euis$total)
+    }))
+  } else {
+    maxdate <- lubridate::floor_date(lubridate::today(), "year") - lubridate::days(1)
+    mindate <- maxdate - lubridate::years(nYears) + lubridate::days(1)
+    weather <- read.ghcn(stationid, mindate, maxdate)
+    weather$year <- lubridate::year(weather$date)
+    
+    dds <- do.call('rbind', by(weather, weather$year, function(x) {
+      toReturn <- data.frame("year" = x$year[1])
+      if(!is.na(mod$LS['heatingBase'])) {
+        toReturn$HDD <- sum((mod$LS['heatingBase'] - x$aveTemp) * 
+                              ((mod$LS['heatingBase'] - x$aveTemp) > 0))
+      }
+      if(!is.na(mod$LS['coolingBase'])) {
+        toReturn$CDD <- sum((x$aveTemp - mod$LS['coolingBase']) * 
+                              ((x$aveTemp - mod$LS['heatingBase']) > 0))        
+      }
+      toReturn
+    }))
+    
+    # Project each year w/ bootstrap replicates
+    projections <- do.call('rbind', by(weather, weather$year, function(x) {
+      
+      # Calc each EUI from the bootstrap replicates
+      euis <- do.call('rbind', lapply(1:nrow(mod$bootstraps), function(i) {
+        # Derive degree days
+        if(!is.na(mod$LS['heatingBase'])) {
+          hdd <- sum((mod$bootstraps$heatingBase[i] - x$aveTemp) * 
+                                ((mod$bootstraps$heatingBase[i] - x$aveTemp) > 0))
+        }
+        if(!is.na(mod$LS['coolingBase'])) {
+          cdd <- sum((x$aveTemp - mod$bootstraps$coolingBase[i]) * 
+                                ((x$aveTemp - mod$bootstraps$coolingBase[i]) > 0))        
+        }
+        
         if(!is.null(mod$bootstraps$baseLoad)) {
           baseLoad <- mod$bootstraps$baseLoad[i]
           tmp <- baseLoad
@@ -889,28 +958,26 @@ projection <- function(mod, stationid) {
         
         heating <- 0
         if(!is.null(mod$bootstraps$heatingBase)) {
-          if(t < mod$bootstraps$heatingBase[i]) {
-            heating <- mod$bootstraps$heatingSlope[i] * (mod$bootstraps$heatingBase[i] - t)
-            tmp <- tmp + heating
-          }
+          heating <- mod$bootstraps$heatingSlope[i] * hdd / 365
+          tmp <- tmp + heating
         } 
         
         cooling <- 0
         if(!is.null(mod$bootstraps$coolingBase)) {
-          if(t > mod$bootstraps$coolingBase[i]) {
-            cooling <- mod$bootstraps$coolingSlope[i] * (t - mod$bootstraps$coolingBase[i])
-            tmp <- tmp + cooling
-          }
+          cooling <- mod$bootstraps$coolingSlope[i] * cdd / 365
+          tmp <- tmp + cooling
         }
-        c("baseLoad" = baseLoad, "heating" = heating, "cooling" = cooling, "total" = tmp)
+        data.frame("year" = x$year[1], 
+                   "baseLoad" = baseLoad, 
+                   "heating" = heating, 
+                   "cooling" = cooling, 
+                   "total" = tmp)
       }))
-      apply(tmp, 2, mean)
     }))
-    euis <- as.data.frame(euis)
-    data.frame("year" = y, "baseLoad" = euis$baseLoad,
-               "heating" = euis$heating, "cooling" = euis$cooling,
-               "total" = euis$total)
-  }))
+
+  }
+  
+
   
   # Collapse into 95% bounds
   bounds <- do.call('rbind', by(projections, projections$year, function(x) {
@@ -939,7 +1006,6 @@ print.projection <- function(projection, nYears = 30) {
             FUN = mean,
             data = projection$bounds[rows, ])
   toPrint <- toPrint[toPrint$mean > 0, ]
-  print(paste(nYears, "Year Average:"))
   print(paste(length(unique(projection$bounds$year[rows])), "years of full weather data"))
   print(toPrint)
 }
