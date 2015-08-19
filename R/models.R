@@ -915,23 +915,25 @@ projection <- function(mod, stationid, nYears = 20) {
                  "total" = euis$total)
     }))
   } else {
-    maxdate <- lubridate::floor_date(lubridate::today(), "year") - lubridate::days(1)
+    # maxdate <- lubridate::floor_date(lubridate::today(), "year") - lubridate::days(1)
+    maxdate <- lubridate::today()
     mindate <- maxdate - lubridate::years(nYears) + lubridate::days(1)
     weather <- read.ghcn(stationid, mindate, maxdate)
     weather$year <- lubridate::year(weather$date)
+    weather <- weather[weather$year < lubridate::year(lubridate::today()), ]
     
-    dds <- do.call('rbind', by(weather, weather$year, function(x) {
-      toReturn <- data.frame("year" = x$year[1])
-      if(!is.na(mod$LS['heatingBase'])) {
-        toReturn$HDD <- sum((mod$LS['heatingBase'] - x$aveTemp) * 
-                              ((mod$LS['heatingBase'] - x$aveTemp) > 0))
-      }
-      if(!is.na(mod$LS['coolingBase'])) {
-        toReturn$CDD <- sum((x$aveTemp - mod$LS['coolingBase']) * 
-                              ((x$aveTemp - mod$LS['heatingBase']) > 0))        
-      }
-      toReturn
-    }))
+#     dds <- do.call('rbind', by(weather, weather$year, function(x) {
+#       toReturn <- data.frame("year" = x$year[1])
+#       if(!is.na(mod$LS['heatingBase'])) {
+#         toReturn$HDD <- sum((mod$LS['heatingBase'] - x$aveTemp) * 
+#                               ((mod$LS['heatingBase'] - x$aveTemp) > 0))
+#       }
+#       if(!is.na(mod$LS['coolingBase'])) {
+#         toReturn$CDD <- sum((x$aveTemp - mod$LS['coolingBase']) * 
+#                               ((x$aveTemp - mod$LS['heatingBase']) > 0))        
+#       }
+#       toReturn
+#     }))
     
     # Project each year w/ bootstrap replicates
     projections <- do.call('rbind', by(weather, weather$year, function(x) {
@@ -941,11 +943,11 @@ projection <- function(mod, stationid, nYears = 20) {
         # Derive degree days
         if(!is.na(mod$LS['heatingBase'])) {
           hdd <- sum((mod$bootstraps$heatingBase[i] - x$aveTemp) * 
-                                ((mod$bootstraps$heatingBase[i] - x$aveTemp) > 0))
+                                ((mod$bootstraps$heatingBase[i] - x$aveTemp) > 0), na.rm = TRUE)
         }
         if(!is.na(mod$LS['coolingBase'])) {
           cdd <- sum((x$aveTemp - mod$bootstraps$coolingBase[i]) * 
-                                ((x$aveTemp - mod$bootstraps$coolingBase[i]) > 0))        
+                                ((x$aveTemp - mod$bootstraps$coolingBase[i]) > 0), na.rm = TRUE)
         }
         
         if(!is.null(mod$bootstraps$baseLoad)) {

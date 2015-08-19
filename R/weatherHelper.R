@@ -230,6 +230,12 @@ read.ghcn <- function(stationid, startdate, enddate) {
   
   dset <- plyr::arrange(dset, date)
   
+  if(sum(is.na(dset$aveTemp))) {
+    xx <- 1:nrow(dset)
+    newvals <- approx(xx, dset$aveTemp, xout = xx[is.na(dset$aveTemp)])$y
+    dset$aveTemp[is.na(dset$aveTemp)] <- newvals
+  }
+  
   return(dset)
 }
 
