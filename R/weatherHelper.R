@@ -230,10 +230,13 @@ read.ghcn <- function(stationid, startdate, enddate) {
   
   dset <- plyr::arrange(dset, date)
   
+  dset$interpolated <- FALSE
   if(sum(is.na(dset$aveTemp))) {
     xx <- 1:nrow(dset)
-    newvals <- approx(xx, dset$aveTemp, xout = xx[is.na(dset$aveTemp)])$y
-    dset$aveTemp[is.na(dset$aveTemp)] <- newvals
+    missingTemps <- is.na(dset$aveTemp)
+    newvals <- approx(xx, dset$aveTemp, xout = xx[missingTemps])$y
+    dset$aveTemp[missingTemps] <- newvals
+    dset$interpolated[missingTemps] <- TRUE
   }
   
   return(dset)
@@ -531,7 +534,7 @@ summary.stationComp <- function(sc, days = 14) {
   
   dset <- smoothTemps(sc$data, days)
   sumStats <- do.call('rbind', by(dset, dset$id, function(x) {
-    data.frame("dataFrac" = sum(!is.na(x$aveTemp)) / nrow(x),
+    data.frame("dataFrac" = sum(!x$interpolated) / nrow(x),
       "relativeTemp" = mean(x$scaledTempRaw, na.rm = TRUE),
       "aveTemp" = mean(x$aveTemp, na.rm = TRUE),
       "id" = x$id[1])
