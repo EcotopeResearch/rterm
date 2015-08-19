@@ -985,9 +985,9 @@ projection <- function(mod, stationid, nYears = 20) {
       z <- x[, k]
       data.frame("year" = x$year[1],
                  "variable" = names(x)[k],
-                 "mean" = mean(z),
-                 "lower2.5" = as.numeric(quantile(z, .025)),
-                 "upper97.5" = as.numeric(quantile(z, .975)))
+                 "mean" = mean(z, na.rm = TRUE),
+                 "lower2.5" = as.numeric(quantile(z, .025, na.rm = TRUE)),
+                 "upper97.5" = as.numeric(quantile(z, .975, na.rm = TRUE)))
     }))
   }))
   bounds <- bounds[bounds$year < lubridate::year(lubridate::today()), ]
