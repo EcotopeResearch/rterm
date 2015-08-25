@@ -996,6 +996,10 @@ projection <- function(mod, stationid, nYears = 20) {
   
   toReturn <- list("mod" = mod, "bounds" = bounds)
   class(toReturn) <- "projection"
+  if(!is.null(attr(mod, "sqft"))) {
+    attr(toReturn, "sqft")
+  }
+  attr(toReturn, "gas") <- attr(mod, "gas")
   toReturn
 
 }
@@ -1034,9 +1038,9 @@ plot.projection <- function(projection, movingAverage = FALSE, total = TRUE) {
     bounds <- bounds[bounds$variable %in% vars, ]
   }
   
-  if(!is.null(attr(mod, "sqft"))) {
+  if(!is.null(attr(projection, "sqft"))) {
     yvar <- "Annualized EUI"
-  } else if(attr(mod, "gas")) {
+  } else if(attr(projection, "gas")) {
     yvar <- "Daily Therms"
   } else {
     yvar <- "Daily kWh"

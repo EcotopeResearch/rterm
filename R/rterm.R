@@ -518,6 +518,11 @@ extractModel <- function(term, name) {
   } else if(length(toSelect) == 0) {
     stop(paste("Model", name, "not found"))
   }
-  term$models[[toSelect]]
+  toReturn <- term$models[[toSelect]]
+  attr(toReturn, "gas") <- attr(term, "gas")
+  if(!is.null(attr(term, "sqft"))) {
+    attr(toReturn, "sqft") <- attr(term, "sqft")
+  }
+  toReturn
 }
 
