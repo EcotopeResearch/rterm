@@ -861,22 +861,15 @@ summary.tlm <- function(object, ...) {
 #' setting up this functionality
 #' 
 #' @param mod An individual model object that has been extracted with \code{\link{extractModel}} 
-#' @param stationid the GHCN Daily station id
-#' @param nYears optional number of years to project onto. This will apply to the 
-#' degree day model, since it has to read every day. The change point will read
-#' monthly averages and so can very quickly get all of the weather records. 20 is 
-#' the default and usually a good number.
+#' @param nYears optional number of years to project onto. 
 #' 
 #' @return a projection object that can be printed or plotted
 #' 
 #' @examples
-#' # Assuming a term has been fit called 'mod' with a degree day model
-#' # and the GHCN station id is stored as a string stationid
-#' dd <- extractModel(mod, "degreeday")
-#' p <- projection(dd, stationid, nYears = 10)
+#' # Assuming a term has been fit called 'mod' with a NOAA webservices weather
+#' p <- projection(mod, nYears = 20)
 #' p
 #' plot(p)
-
 projection <- function(term, nYears = 20) {
   print(paste("Projecting Temperature-Energy Dependence onto archival",
               "weather. This may take a minute to read data from the NOAA API."))
