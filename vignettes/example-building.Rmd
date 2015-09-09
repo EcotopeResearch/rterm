@@ -122,12 +122,12 @@ bootstraps(dd)
 
 ## Projecting onto archival weather
 
-An alternative to TMY3 weather for making generalizations is to simply project the relationship found in the observed data to archival weather. Right now this is implemented for the change point model, mainly because there's a trick to get monthly weather averages. It would be unbelievably time consuming to try to get 80 years worth of daily weather data from the NOAA API and derive degree days to some arbitrary base. My observation has been that -- in terms of just fitted values -- the change point and degree day are pretty similar.
+An alternative to TMY3 weather for making generalizations is to simply project the relationship found in the observed data to archival weather. There's a function called "projection" that returns a projection object that you can print or plot. 
 
-There's a function called "projection" that returns a projection object that you can print or plot. You can do it with either the change point or degree day models. The change point model will let you project through more data faster, but you can really only trust the total projected use, not the breakdown in to heating/cooling. The degree day model will be slower and use less data, but you can better trust the heating/cooling breakdown. Here's how it works, projecting the degree day model through the last 20 years of weather data.
+This function works on the full fitted "term" object (previously you had to extract an individual model and run it on that). 
 
 ```{r, fig.width=7,fig.height=5}
-p <- projection(dd, "GHCND:USW00024233", nYears = 20)
+p <- projection(mod, nYears = 40)
 p
 
 plot(p)
