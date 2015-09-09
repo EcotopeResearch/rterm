@@ -852,32 +852,100 @@ summary.tlm <- function(object, ...) {
   }
 }
 
-projection <- function(mod, stationid, nYears = 20) {
+
+#' Project a temperature-energy dependence onto archival weather data
+#' 
+#' Returns a projection object that can be printed or plotted to deliver a long-
+#' term average prediction of energy use. This function currently only works with
+#' the NOAA API for Daily GHCN data. See vignette("weather-helper") for details on 
+#' setting up this functionality
+#' 
+#' @param mod An individual model object that has been extracted with \code{\link{extractModel}} 
+#' @param stationid the GHCN Daily station id
+#' @param nYears optional number of years to project onto. This will apply to the 
+#' degree day model, since it has to read every day. The change point will read
+#' monthly averages and so can very quickly get all of the weather records. 20 is 
+#' the default and usually a good number.
+#' 
+#' @return a projection object that can be printed or plotted
+#' 
+#' @examples
+#' # Assuming a term has been fit called 'mod' with a degree day model
+#' # and the GHCN station id is stored as a string stationid
+#' dd <- extractModel(mod, "degreeday")
+#' p <- projection(dd, stationid, nYears = 10)
+#' p
+#' plot(p)
+
+projection <- function(term, nYears = 20) {
+  print(paste("Projecting Temperature-Energy Dependence onto archival",
+              "weather. This may take a minute to read data from the NOAA API."))
+  
+  ids <- lapply(term$models, function(x) {
+    if(!is.null(attr(x, "stationid"))) {
+      attr(x, "stationid")
+    } else {
+      NULL
+    }
+  })
+  
+  maxdate <- lubridate::today()
+  mindate <- lubridate::floor_date(maxdate - lubridate::years(nYears), "year")
+  
+  uniqueIds <- unique(unlist(ids))
+  weather <- lapply(uniqueIds, function(x) {
+    weather <- read.ghcn(x, mindate, maxdate)
+    weather$year <- lubridate::year(weather$date)
+    weather <- weather[weather$year < lubridate::year(lubridate::today()), ]   
+    
+    # Look for years w/ missing data, like if we went too far back
+    nmissing <- aggregate(interpolated ~ year, 
+                          data = weather,
+                          FUN = sum)
+    mYears <- nmissing$year[nmissing$interpolated > 50]
+    if(length(mYears)) {
+      weather <- weather[-which(weather$year %in% mYears), ]
+      nYears <- nYears - length(mYears)
+    }
+    weather
+  })
+  names(weather) <- uniqueIds
+  
+ 
+  projections <- lapply(names(term$models), function(x) {
+    mod <- extractModel(term, x)
+    
+    if(is.null(attr(mod, "stationid"))) {
+      warning(paste("No stationid found for model", x))
+      toReturn <- NULL
+    } else {
+      weatherTmp <- weather[[attr(mod, "stationid")]]
+      toReturn <- oneProjection(mod, weatherTmp, nYears)
+    }
+    toReturn
+  })
+  class(projections) <- "projection"
+  names(projections) <- names(term$models)
+  attr(projections, "nYears") <- nYears
+  projections
+}
+
+oneProjection <- function(mod, weather, nYears = 20) {
 #   if(!inherits(mod, "cplm") & !inherits(mod, "web")) {
 #     stop("First argument must be a model of class 'cplm' or 'web'")
 #   }
-  if(!inherits(stationid, "character")) {
-    stop("Second argument must be ghcn station id as character")
-  }
-  
-  # Get as much weather as possible
-  stationTmp <- rterm::stations[rterm::stations$id == stationid, ]
-  if(!nrow(stationTmp)) {
-    stop(paste("Could not find station id", stationid))
-  }
-  
-  
+
+  # For the change point/ linear in average interval temperature method
   if(inherits(mod, "cplm") | inherits(mod, "web")) {
-    mindate <- as.Date(stationTmp$mindate)
-    mindate <- lubridate::ceiling_date(mindate, "year")
-    weather <- read.ghcn.monthly(stationid, mindate, lubridate::today())
-    weather$year <- lubridate::year(weather$date)
-    weather$missing <- is.na(weather$aveTemp)
-    missing <- aggregate(missing ~ year, data = weather, FUN = sum)
-    missingYears <- missing$year[missing$missing > 0]
-    weather <- weather[!(weather$year %in% missingYears), ]
-    
-    
+    # Aggregate # of days equal to the average cycle length in the data.
+    # This takes care of monthly/bi-monthly/weekly for the change point dealy
+    days <- round(mean(mod$data$days), 0)
+    weather <- do.call('rbind', by(weather, weather$year, function(x) {
+      x$cycle <- rep(1:1000, each = days)[1:nrow(x)]
+      x
+    }))
+    weather <- aggregate(aveTemp ~ year + cycle, data = weather, FUN = mean)
+
     projections <- do.call('rbind', lapply(unique(weather$year), function(y) {
       wt <- weather[weather$year == y, ]
       euis <- do.call('rbind', lapply(1:nrow(mod$bootstraps), function(i) {
@@ -915,26 +983,8 @@ projection <- function(mod, stationid, nYears = 20) {
                  "total" = euis$total)
     }))
   } else {
-    # maxdate <- lubridate::floor_date(lubridate::today(), "year") - lubridate::days(1)
-    maxdate <- lubridate::today()
-    mindate <- maxdate - lubridate::years(nYears) + lubridate::days(1)
-    weather <- read.ghcn(stationid, mindate, maxdate)
-    weather$year <- lubridate::year(weather$date)
-    weather <- weather[weather$year < lubridate::year(lubridate::today()), ]
-    
-#     dds <- do.call('rbind', by(weather, weather$year, function(x) {
-#       toReturn <- data.frame("year" = x$year[1])
-#       if(!is.na(mod$LS['heatingBase'])) {
-#         toReturn$HDD <- sum((mod$LS['heatingBase'] - x$aveTemp) * 
-#                               ((mod$LS['heatingBase'] - x$aveTemp) > 0))
-#       }
-#       if(!is.na(mod$LS['coolingBase'])) {
-#         toReturn$CDD <- sum((x$aveTemp - mod$LS['coolingBase']) * 
-#                               ((x$aveTemp - mod$LS['heatingBase']) > 0))        
-#       }
-#       toReturn
-#     }))
-    
+    # For the degree day method
+
     # Project each year w/ bootstrap replicates
     projections <- do.call('rbind', by(weather, weather$year, function(x) {
       
@@ -994,7 +1044,7 @@ projection <- function(mod, stationid, nYears = 20) {
   }))
   bounds <- bounds[bounds$year < lubridate::year(lubridate::today()), ]
   
-  toReturn <- list("mod" = mod, "bounds" = bounds)
+  toReturn <- list("mod" = mod, "bounds" = bounds, "weather" = weather)
   class(toReturn) <- "projection"
   if(!is.null(attr(mod, "sqft"))) {
     attr(toReturn, "sqft")
@@ -1006,64 +1056,78 @@ projection <- function(mod, stationid, nYears = 20) {
 
 
 
-print.projection <- function(projection, nYears = 30) {
-  rows <- projection$bounds$year >= (max(projection$bounds$year) - nYears)
-  toPrint <- aggregate(cbind(mean, lower2.5, upper97.5) ~ variable, 
-            FUN = mean,
-            data = projection$bounds[rows, ])
-  toPrint <- toPrint[toPrint$mean > 0, ]
-  print(paste(length(unique(projection$bounds$year[rows])), "years of full weather data"))
-  print(toPrint)
+print.projection <- function(projection) {
+  nYears <- attr(projection, "nYears")
+  lapply(seq_along(projection), function(i) {
+    x <- projection[[i]]
+    cat(paste("Long term average for Model", names(projection)[i], "\n"))
+    rows <- x$bounds$year >= (max(x$bounds$year) - nYears)
+    toPrint <- aggregate(cbind(mean, lower2.5, upper97.5) ~ variable, 
+                         FUN = mean,
+                         data = x$bounds[rows, ])
+    toPrint <- toPrint[toPrint$mean > 0, ]
+    cat(paste(length(unique(x$bounds$year[rows])), "years of full weather data\n"))
+    print(toPrint)
+    cat("\n")
+  })
 }
 
 plot.projection <- function(projection, movingAverage = FALSE, total = TRUE) {
-  bounds <- projection$bounds
+  nModels <- length(projection)
+
   
-  if(movingAverage) {
-    bounds <- do.call('rbind', by(bounds, bounds$variable, function(x) {
+  bounds <- do.call('rbind', lapply(seq_along(projection), function(i) {
+    model <- names(projection)[i]
+    p <- projection[[model]]
+    bounds <- do.call('rbind', by(p$bounds, p$bounds$variable, function(x) {
       x <- plyr::arrange(x, -year)
       x$ma <- sapply(1:nrow(x), function(i) {
         mean(x$mean[1:i])
       })
+      x$model <- model
       x
     }))
-  }
+    bounds$year <- bounds$year + (i - mean(1:nModels)) / (nModels + 1)
+    bounds
+  }))
+
   
   if(total) {
     bounds <- bounds[bounds$variable == "total", ]
   } else {
     bounds <- bounds[bounds$variable %in% c("heating", "cooling"), ]
-    tmp <- aggregate(mean ~ variable, data = bounds, FUN = mean)
-    vars <- tmp$variable[tmp$mean > 0]
-    bounds <- bounds[bounds$variable %in% vars, ]
+    tmp <- aggregate(mean ~ variable + model, data = bounds, FUN = mean)
+    names(tmp)[3] <- "overall"
+    bounds <- merge(bounds, tmp[tmp$overall > 0, ])
   }
   
-  if(!is.null(attr(projection, "sqft"))) {
+  if(!is.null(attr(projection[[1]], "sqft"))) {
     yvar <- "Annualized EUI"
-  } else if(attr(projection, "gas")) {
+  } else if(attr(projection[[1]], "gas")) {
     yvar <- "Daily Therms"
   } else {
     yvar <- "Daily kWh"
   }
   
+  
   mod2 <- ggplot2::ggplot(bounds) + ggplot2::theme_bw() + 
     ggplot2::theme(axis.text.x = ggplot2::element_text(angle = 45, hjust = 1)) +
-    ggplot2::scale_x_continuous(breaks = seq(min(bounds$year), max(bounds$year), 2)) +
+    ggplot2::scale_x_continuous(breaks = seq(min(round(bounds$year), 0), max(bounds$year), 2)) +
     ggplot2::xlab("") + ggplot2::ylab(paste(yvar, "and 95% Interval")) +
     ggplot2::ggtitle(paste("Probabilistic Projected", yvar, "from Archival Weather"))
   
   if(total) {
-    mod2 <- mod2 +ggplot2::geom_point(ggplot2::aes(x = year, y = mean)) + 
-      ggplot2::geom_errorbar(ggplot2::aes(x = year, ymin = lower2.5, ymax = upper97.5))
+    mod2 <- mod2 +ggplot2::geom_point(ggplot2::aes(x = year, y = mean, col = model)) + 
+      ggplot2::geom_errorbar(ggplot2::aes(x = year, ymin = lower2.5, ymax = upper97.5, col = model))
     if(movingAverage) {
-      mod2 <- mod2 + ggplot2::geom_line(ggplot2::aes(x = year, y = ma), linetype = "dashed")
+      mod2 <- mod2 + ggplot2::geom_line(ggplot2::aes(x = year, y = ma, col = model), linetype = "dashed")
     }
   } else {
-    mod2 <- mod2 +ggplot2::geom_point(ggplot2::aes(x = year, y = mean, col = variable)) + 
-      ggplot2::geom_errorbar(ggplot2::aes(x = year, ymin = lower2.5, ymax = upper97.5, col = variable)) +
+    mod2 <- mod2 +ggplot2::geom_point(ggplot2::aes(x = year, y = mean, col = model)) + 
+      ggplot2::geom_errorbar(ggplot2::aes(x = year, ymin = lower2.5, ymax = upper97.5, col = model, linetype = variable)) +
       ggplot2::scale_colour_discrete(name = "Type")
     if(movingAverage) {
-      mod2 <- mod2 + ggplot2::geom_line(ggplot2::aes(x = year, y = ma, col = variable), linetype = "dashed")
+      mod2 <- mod2 + ggplot2::geom_line(ggplot2::aes(x = year, y = ma, col = model, linetype = variable), linetype = "dashed")
     }
   }
   

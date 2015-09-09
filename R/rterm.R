@@ -285,6 +285,7 @@ addWeather <- function(term, weather = NULL, formula = NULL, stationid = NULL, t
       minDate <- min(term$data$dateStart)
       maxDate <- max(term$data$dateEnd)
       term$weather[[name]] <- read.ghcn(stationid, minDate, maxDate)
+      attr(term$weather[[name]], "stationid") <- stationid
     } else {
       warning(paste("With no data, addWeather does not know how much weather data to query",
                     "See help(addData) or help(addWeather)"))
@@ -329,6 +330,7 @@ addWeather <- function(term, weather = NULL, formula = NULL, stationid = NULL, t
     stop("Must enter either a stationid, a weather dataset, or associate an address w/ the TERM")
   }
   
+
   # Interpolate missing values, if necessary
   if(!is.null(term$weather[[name]]$time)) {
     tvar <- "time"
@@ -492,6 +494,10 @@ evalOne <- function(term, method, weather) {
   
   if(!is.null(attr(term, "sqft"))) {
     attr(mod, "sqft") <- attr(term, "sqft")
+  }
+  
+  if(!is.null(attr(weather, "stationid"))) {
+    attr(mod, "stationid") <- attr(weather, "stationid")
   }
   
   return(mod)
