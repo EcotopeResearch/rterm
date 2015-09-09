@@ -61,6 +61,10 @@ read.noaa <- function(table, param = NULL, quietly = TRUE) {
     print(httr::content(tmp))
     print(noaa_key)
   }
+  if(length(grep("We are sorry, but the website you were looking for is currently unavailable",
+                 httr::content(tmp, "text")))) {
+    stop("Uh oh, it looks like the NOAA webservices are down")
+  }
   jsonlite::fromJSON(httr::content(tmp, "text"))$results
 }
 
