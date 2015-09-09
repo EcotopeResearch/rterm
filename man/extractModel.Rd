@@ -15,7 +15,9 @@ extractModel(term, name)
 the extracted model
 }
 \description{
-Pu
+Pulls on individual model fit out of a term object. For example
+if you fitted both "degreeday" and "changepoint" you can pull out
+just the change point model with extractModel(mod, "cp")
 }
 \seealso{
 \code{\link{newTerm}} \code{\link{addData}}

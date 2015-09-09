@@ -4,8 +4,8 @@
 \alias{plot.stationComp}
 \title{Plot a comparison of GHCN weather stations}
 \usage{
-plot.stationComp(sc, days = 14, var = "aveTemp", type = "actual",
-  xvar = "date")
+\method{plot}{stationComp}(sc, days = 14, var = "aveTemp",
+  type = "actual", xvar = "date")
 }
 \arguments{
 \item{sc}{stationComp object as returned by \code{\link{stationCompare}}}

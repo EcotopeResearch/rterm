@@ -4,7 +4,7 @@
 \alias{plot.cplm}
 \title{Plot Change Point Linear Model}
 \usage{
-plot.cplm(x, fit = NULL)
+\method{plot}{cplm}(x, fit = NULL)
 }
 \arguments{
 \item{x}{a 'cplm' object}
