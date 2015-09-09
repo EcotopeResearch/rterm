@@ -127,7 +127,7 @@ An alternative to TMY3 weather for making generalizations is to simply project t
 This function works on the full fitted "term" object (previously you had to extract an individual model and run it on that). 
 
 ```{r, fig.width=7,fig.height=5}
-p <- projection(mod, nYears = 40)
+p <- projection(mod, nYears = 20)
 p
 
 plot(p)
