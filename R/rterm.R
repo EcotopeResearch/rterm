@@ -85,7 +85,7 @@ addData <- function(term, data, formula = NULL, interval = NULL, energyVar = NUL
     y <- model.response(mf)
     term$data <- data.frame(mf)
     eName <- tolower(names(term$data)[1])
-    if(length(grep("gas", eName)) | length(grep("therm", eName))) {
+    if(length(grep("gas", eName)) | length(grep("therm", eName)) | length(grep("thm", eName))) {
       isGas <- TRUE
       attr(term, "gas") <- TRUE
     } else {
