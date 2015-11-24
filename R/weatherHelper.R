@@ -756,6 +756,11 @@ geocode <- function(name, quietly = TRUE) {
   tmp <- httr::GET(urlx)
   results <- jsonlite::fromJSON(httr::content(tmp, "text"))$results
   
+  if(length(results) == 0) {
+    warning(paste("Could Not Find City/Address", name))
+    return(NULL)    
+  }
+  
   if(nrow(results) != 1) {
     warning(paste("Ambiguous City/Address", name))
     return(NULL)

@@ -632,21 +632,28 @@ plot.term <- function(term, xvar = NULL) {
   }
   
   nmodels <- length(term$models)
-  if(!nmodels) {
-    stop("No Models Evaluated, cannot plot")
-  } else if(nmodels == 1 & xvar != "time" & xvar != "resids") {
-    return(plot(term$models[[1]]))
-  }
+#   if(!nmodels) {
+#     stop("No Models Evaluated, cannot plot")
+#   } else if(nmodels == 1 & xvar != "time" & xvar != "resids") {
+#     return(plot(term$models[[1]]))
+#   }
   
   # Need to get fitted values...
   
-  abc <- do.call('rbind', lapply(seq_along(term$models), function(i) {
-    x <- term$models[[i]]
-    tmp <- subset(x$data, select = c(dateStart, dailyEnergy, temp, fitted))
-    tmp$type <- names(term$models)[i]
-    tmp
-  }))
-  abc$resid <- abc$dailyEnergy - abc$fitted
+  if(nmodels > 1) {
+    abc <- do.call('rbind', lapply(seq_along(term$models), function(i) {
+      x <- term$models[[i]]
+      tmp <- subset(x$data, select = c(dateStart, dailyEnergy, temp, fitted))
+      tmp$type <- names(term$models)[i]
+      tmp
+    }))
+  } else {
+    abc <- subset(term$models[[1]]$data, 
+                  select = c(dateStart, dailyEnergy, temp, fitted))
+    abc$type <- names(term$models)[1]
+  }
+  abc$resid <- abc$dailyEnergy - abc$fitted    
+
   
   meanTemps <- do.call('rbind', by(abc, abc$dateStart, function(x) {
     data.frame("temp" = mean(x$temp),
