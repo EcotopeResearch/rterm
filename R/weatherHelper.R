@@ -905,3 +905,49 @@ stationMap.stationComp <- function(comp, zoom = 10, type = "relative", art = FAL
   
   p  
 }
+
+
+
+# In case you wanted precipitation
+
+read.one.precip <- function(stationid, startdate, enddate) {
+  
+  param <- paste0("datasetid=GHCND&",
+                  "stationid=", stationid, "&",
+                  "startdate=", startdate, "&",
+                  "enddate=", enddate, "&",
+                  "datatypeid=PRCP&",
+                  "limit=1000")
+  
+  # Query the NOAA API for the data
+  dset <- read.noaa("data", param)
+  dset$date <- as.Date(dset$date)
+  dset$precip <- dset$value / 10 * 0.0393701
+  dset[, c("date", "precip")]
+}
+
+
+read.precip <- function(stationid, startdate, enddate) {
+  stDate <- try(as.Date(startdate))
+  if(inherits(stDate, "try-error")) {
+    stop(paste("Could not parse start date", startdate))
+  }
+  
+  edDate <- try(as.Date(enddate))
+  if(inherits(edDate, "try-error")) {
+    stop(paste("Could not parse end date", enddate))
+  }
+  
+  # We can download 1 year at a time
+  interval <- as.numeric(difftime(edDate, stDate, units = "days"))
+  nCalls <- ceiling(interval / 365)
+  
+  dsets <- lapply(1:nCalls, function(i) {
+    read.one.precip(stationid, stDate + (i - 1) * 365, min(edDate, stDate + i * 365 - 1))
+  })
+  
+  dset <- do.call('rbind', dsets)
+}
+
+
+
