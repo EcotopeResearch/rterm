@@ -129,6 +129,7 @@ int deriveVarC(double *temp, double base, double *newvar, int *rows, int heatcoo
       if(tmpVal < 0) tmpVal = 0;
       
       newvar[tmpRow] += tmpVal / ns[tmpRow];
+      // newvar[tmpRow] += tmpVal;
     }
     
   } else {

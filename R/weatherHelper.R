@@ -921,6 +921,10 @@ read.one.precip <- function(stationid, startdate, enddate) {
   
   # Query the NOAA API for the data
   dset <- read.noaa("data", param)
+  if(is.null(dset)) {
+    print(paste("Null dset for", stationid, startdate, enddate))
+    return(NULL)
+  }
   dset$date <- as.Date(dset$date)
   dset$precip <- dset$value / 10 * 0.0393701
   dset[, c("date", "precip")]
@@ -947,6 +951,17 @@ read.precip <- function(stationid, startdate, enddate) {
   })
   
   dset <- do.call('rbind', dsets)
+  
+  allDates <- seq(from = stDate, to = edDate, by = 1)
+  isMissing <- setdiff(allDates, dset$date)
+  if(length(isMissing)) {
+    isMissing <- as.Date(isMissing, origin = "1970-01-01")
+    dset <- rbind(dset,
+                  data.frame("date" = isMissing, "precip" = NA))
+  }
+  
+  dset <- plyr::arrange(dset, date)
+  
 }
 
 

@@ -155,6 +155,7 @@ addData <- function(term, data, formula = NULL, interval = NULL, energyVar = NUL
       if(interval == "monthly") {
         term$data$dateStart <- lubridate::floor_date(term$data[, 2], "month")
         term$data$dateEnd <- term$data$dateStart %m+% months(1)
+        # term$data$days <- term$data$dateEnd - term$data$dateStart
       } else if(interval == "daily") {
         names(term$data)[2] <- "dateStart"
         term$data$dateEnd <- term$data$dateStart + lubridate::days(1)
@@ -195,7 +196,7 @@ addData <- function(term, data, formula = NULL, interval = NULL, energyVar = NUL
   da <- is.null(term$data$days)
   
   if(!ds & !de & da) {
-    term$data$days <- as.numeric(difftime(term$data$dateEnd, term$data$dateStart))
+    term$data$days <- as.numeric(difftime(term$data$dateEnd, term$data$dateStart, units = "days"))
   } else if(!ds & de & !da) {
     term$data$dateEnd <- term$data$dateStart + term$data$days
   } else if(ds & !de & !da) {
