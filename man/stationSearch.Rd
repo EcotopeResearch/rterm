@@ -36,7 +36,7 @@ a data frame with information about the relevant stations found.
 \description{
 Search by location name, station name or latitude/longitude for GHCN weather stations
 that can be loaded with \code{\link{read.ghcn}}. Note that you need to
-acquire a \href{https://developers.google.com/maps/documentation/geocoding/?hl=en_US#api_key}{Google Maps API key} for the default functionality, which is to
+acquire a \href{https://developers.google.com/maps/documentation/geocoding/?hl=en_US#get-a-key}{Google Maps API key} for the default functionality, which is to
 search for stations close to a latitude/longitude as returned by a Google
 Maps geocode.
 }
