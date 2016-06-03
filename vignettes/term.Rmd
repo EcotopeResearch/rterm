@@ -12,8 +12,9 @@ vignette: >
 ## Constructing a term
 
 ```{r, echo=FALSE}
-noaa_key <- "mgPWFcAfmzIrHjXlacsksLXkhajnyFDp"
-google_key <- "AIzaSyBYJbN25Bg_6UbL_FuoyMcv4GaH8nE7Yq4"
+# These keys have been registered for the sole use of building rterm vignettes
+google_key <- "AIzaSyCOavbshIM5-TY3Dm07ar_l_BwR6gvQYWk"
+noaa_key <- "fBQbabTcSnILcGQWxfXBYLMclnUKLVlH"
 ```
 
 Everything goes through a "term" S3 class. It may seem a bit complicated up front, but mastering the "term" methods makes this all much easier. We'll walk through an example for the Ecotope office bills, step-by-step, then put it all together at the end.

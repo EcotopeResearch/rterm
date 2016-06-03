@@ -23,7 +23,9 @@ noaa_key <- "your_key_here"
 ```
 
 ```{r, echo=FALSE}
-noaa_key <- "mgPWFcAfmzIrHjXlacsksLXkhajnyFDp"
+# These keys have been registered for the sole use of building rterm vignettes
+google_key <- "AIzaSyCOavbshIM5-TY3Dm07ar_l_BwR6gvQYWk"
+noaa_key <- "fBQbabTcSnILcGQWxfXBYLMclnUKLVlH"
 ```
 
 If you plan on using rterm, and specifically the functions to get weather data with any regularity, I would recommend putting that line assigning the noaa\_key into a .Rprofile file. These are loaded on startup. You can read more at http://www.statmethods.net/interface/customizing.html and https://stat.ethz.ch/R-manual/R-devel/library/base/html/Startup.html (although as usual the official R documentation is a bit unhelpful unless you are already familiar with the topics). Otherwise you can just set the key interactively in a session using rterm. Note that the package will throw a warning on attachment if it can't find a noaa\_key.
@@ -42,10 +44,6 @@ To unleash the full convenience of rterm, you can optionally register another AP
 
 ```{r}
 google_key <- "your_key_here"
-```
-
-```{r, echo=FALSE}
-google_key <- "AIzaSyBYJbN25Bg_6UbL_FuoyMcv4GaH8nE7Yq4"
 ```
 
 In addition, it will help to activate the [Elevation API](https://console.developers.google.com/project/tensile-market-95016/apiui/apiview/elevation_backend/overview) as well. The custom geocoding function in rterm also grabs an elevation, as it is often useful to exclude stations that are say atop a mountain near your building's location.

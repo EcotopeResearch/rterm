@@ -22,8 +22,9 @@ data(commercial)
 ```
 
 ```{r, echo=FALSE}
-google_key <- "AIzaSyBYJbN25Bg_6UbL_FuoyMcv4GaH8nE7Yq4"
-noaa_key <- "mgPWFcAfmzIrHjXlacsksLXkhajnyFDp"
+# These keys have been registered for the sole use of building rterm vignettes
+google_key <- "AIzaSyCOavbshIM5-TY3Dm07ar_l_BwR6gvQYWk"
+noaa_key <- "fBQbabTcSnILcGQWxfXBYLMclnUKLVlH"
 ```
 
 ## Finding Weather
