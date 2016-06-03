@@ -65,6 +65,45 @@ stations <- plyr::arrange(stations, id)
 stations$stateCode <- NULL
 stations$countryCode <- NULL
 
-devtools::use_data(stations, overwrite = TRUE, internal = TRUE)
+
+
+# Grab all of the TMY Data!!!
+
+# USA TMY File
+read.tmy <- function(wname) {
+  print(wname)
+  wfile <- paste(("/storage/server/TMY2DATA/"), wname, sep = "")
+  weather <- read.table(wfile, fill = TRUE)
+  weather <- weather[, 1]
+  weather <- weather[-1]
+  
+  temp <- sapply(1:length(weather), function(i) {
+    tmp <- as.numeric(substring(weather[i],67,70))/10
+    tmp * 1.8 + 32
+  })
+  
+  hourly8760 <- data.frame("doy" = rep(1:365, each = 24),
+             "temp" = temp)
+  daily <- aggregate(temp ~ doy, FUN = mean, data = hourly8760)
+  daily$fname <- wname
+  daily
+}
+
+tmyFiles <- dir("/storage/server/TMY2DATA", pattern = "3\\.tm2$")
+tmyData <- do.call('rbind', lapply(tmyFiles, read.tmy))
+tmyData$fname <- factor(tmyData$fname)
+names(tmyData)[names(tmyData) == "fname"] <- "tmyFile"
+tmyData <- tmyData[-grep("NOSUN", tmyData$tmyFile), ]
+
+
+# Read in TMY Station meta data... where does that live?
+load("../tmyStations.rda")
+tmyStations <- tmyStations[-grep("NOSUN", tmyStations$tmyFile), ]
+
+stations <- stations[, c("name", "id", "latitude", "longitude", "elevation", "elevationUnit",
+                         "mindate", "maxdate", "datacoverage", "country", "state")]
+
+
+devtools::use_data(stations, tmyStations, tmyData, overwrite = TRUE, internal = TRUE)
 
 

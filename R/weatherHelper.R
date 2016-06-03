@@ -324,6 +324,7 @@ calcDistance <- function(lat1, lon1, lat2, lon2) {
 #'  10 closest stations. Optional, defaults to 5.
 #' @param country an optional specification of country
 #' @param state an optional specification of us state
+#' @param type specify either GHCN or TMY for the type of station to search for
 #' 
 #' @return a data frame with information about the relevant stations found. 
 #'  In the case that you specified lat/lon instead of a name this will 
@@ -335,6 +336,9 @@ calcDistance <- function(lat1, lon1, lat2, lon2) {
 #' @examples
 #' # Look for a weather station in Bend, Oregon
 #' stationSearch("Bend, OR")
+#' 
+#' # Look for a TMY station near Bend, Oregon
+#' stationSearch("Bend, OR", type = "TMY")
 #' 
 #' # Find the closest weather stations to a lat/lon pair
 #' # specifying a location in the Columbia Basin
@@ -348,21 +352,29 @@ calcDistance <- function(lat1, lon1, lat2, lon2) {
 #' stationSearch(country = "Switzerland")
 #' 
 #' 
-stationSearch <- function(geocode = NULL, stationName = NULL, lat = NULL, lon = NULL, nClosest = 5, country = NULL, state = NULL, elevThreshold = NULL) {
-  # Check for a country and/or state
+stationSearch <- function(geocode = NULL, stationName = NULL, lat = NULL, lon = NULL, nClosest = 5, country = NULL, state = NULL, elevThreshold = NULL, type = "GHCN") {
+  if(type == "GHCN") {
+    stationsTmp <- stations
+  } else if(type == "TMY") {
+    stationsTmp <- tmyStations
+  } else {
+    stop("Must specify either GHCN or TMY for stationSearch")
+  }
+  
+    # Check for a country and/or state
   if(!is.null(country)) {
-    stations <- stations[grep(country, stations$country, ignore.case = TRUE), ]
+    stationsTmp <- stationsTmp[grep(country, stationsTmp$country, ignore.case = TRUE), ]
   }
   if(!is.null(state)) {
-    stations <- stations[grep(state, stations$state, ignore.case = TRUE), ]
+    stationsTmp <- stationsTmp[grep(state, stationsTmp$state, ignore.case = TRUE), ]
   }
   
-  if(!nrow(stations)) {
-    print("No stations found")
-    return(stations)
+  if(!nrow(stationsTmp)) {
+    print("No stationsTmp found")
+    return(stationsTmp)
   }
   
-  stations$milesDistant <- NA
+  stationsTmp$milesDistant <- NA
   
   # Check if we need to geocode
   elev <- NULL
@@ -379,35 +391,50 @@ stationSearch <- function(geocode = NULL, stationName = NULL, lat = NULL, lon = 
   
   # Now search by either stationName or lat/lon
   if(!is.null(stationName)) {
-    ind <- grep(stationName, stations$name, ignore.case = TRUE)
+    if(type == "GHCN") {
+      varTmp <- "name"
+    } else if(type == "TMY") {
+      varTmp <- "site"
+    }
+    ind <- grep(stationName, stationsTmp[, varTmp], ignore.case = TRUE)
     if(!length(ind)) {
       return(NULL)
     }
   } else if(!is.null(lat) & !is.null(lon)) {
-    stations$milesDistant <- sapply(1:nrow(stations), function(i) {
-      calcDistance(stations$latitude[i], stations$longitude[i], lat, lon)
+    stationsTmp$milesDistant <- sapply(1:nrow(stationsTmp), function(i) {
+      calcDistance(stationsTmp$latitude[i], stationsTmp$longitude[i], lat, lon)
     })
-    stations <- plyr::arrange(stations, milesDistant)
-    ind <- seq(from = 1, to = min(nrow(stations), nClosest), by = 1)
+    stationsTmp <- plyr::arrange(stationsTmp, milesDistant)
+    ind <- seq(from = 1, to = min(nrow(stationsTmp), nClosest), by = 1)
     
-    # Assign lat and lon of search center to stations
+    # Assign lat and lon of search center to stationsTmp
   } else {
-    ind <- 1:nrow(stations)
+    ind <- 1:nrow(stationsTmp)
   }
 
   if(!is.null(elevThreshold)) {
-    stations <- stations[abs(stations$elevation - elev) < elevThreshold, ]
+    stationsTmp <- stationsTmp[abs(stationsTmp$elevation - elev) < elevThreshold, ]
   }
   
-  stations <- subset(stations, select = -c(country, state))
+  stationsTmp <- stationsTmp[, !(names(stationsTmp) %in% c("country", "state"))]
+  # stationsTmp <- subset(stationsTmp, select = -c(country, state))
   
-  attr(stations, "lat") <- lat
-  attr(stations, "lon") <- lon
-  attr(stations, "elev") <- elev
-  attr(stations, "gmapsSearch") <- geocode
+  attr(stationsTmp, "lat") <- lat
+  attr(stationsTmp, "lon") <- lon
+  attr(stationsTmp, "elev") <- elev
+  attr(stationsTmp, "gmapsSearch") <- geocode
   
-  stations <- stations[ind, ]
-  stations
+  stationsTmp <- stationsTmp[ind, ]
+  stationsTmp
+}
+
+
+stationSearchTmy <- function(geocode = NULL, stationName = NULL, lat = NULL, lon = NULL, nClosest = 5, country = NULL, state = NULL, elevThreshold = NULL) {
+  stationSearch(geocode, stationName, lat, lon, nClosest, country, state, elevThreshold, type = "TMY")
+}
+
+stationSearchGhcn <- function(geocode = NULL, stationName = NULL, lat = NULL, lon = NULL, nClosest = 5, country = NULL, state = NULL, elevThreshold = NULL) {
+  stationSearch(geocode, stationName, lat, lon, nClosest, country, state, elevThreshold, type = "GHCN")
 }
 
 smoothTemps <- function(dset, days = 14, var = "aveTemp") {
