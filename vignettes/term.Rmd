@@ -63,6 +63,15 @@ term
 ```
 
 
+### Add TMY
+
+You can also associate TMY files with a term.
+
+```{r}
+tmySearch("Seattle, WA")
+term <- addTmy(term, c("WASeattle3.tm2", "WASeattleBoeing3.tm2"))
+```
+
 ### Add Methodologies
 
 Use the addMethod() function to associate methodologies to the term.
@@ -96,6 +105,7 @@ term <- newTerm() %>%
   addWeather(hourlyWeather, temp ~ time, name="Sea-Tac Hourly") %>%
   addMethod("changepoint", heating = TRUE, cooling = FALSE) %>%
   addMethod("degreeday", heating = TRUE, cooling = FALSE) %>% 
+  addTmy(c("WASeattle3.tm2", "WASeattleBoeing3.tm2")) %>%
   evaluate()
 term
 ```

@@ -85,9 +85,12 @@ addData <- function(term, data, formula = NULL, interval = NULL, energyVar = NUL
     y <- model.response(mf)
     term$data <- data.frame(mf)
     eName <- tolower(names(term$data)[1])
+    attr(term, "eui") <- FALSE
     if(length(grep("gas", eName)) | length(grep("therm", eName)) | length(grep("thm", eName))) {
       isGas <- TRUE
       attr(term, "gas") <- TRUE
+    } else if(length(grep("eui", eName, ignore.case = TRUE))) {
+      attr(term, "eui") <- TRUE
     } else {
       isGas <- FALSE
       attr(term, "gas") <- FALSE
@@ -352,6 +355,23 @@ addWeather <- function(term, weather = NULL, formula = NULL, stationid = NULL, t
 }
 
 
+#' Add TMY weather to a "term" object
+#' 
+#' Associates TMY weather file(s) to a "term" object.
+#' 
+#' @param term the term object to add the method.
+#' @param tmyFiles a vector of tmyFiles to associate with the term. Usually just one ex WASeattle3.tm2
+#' 
+#' @examples 
+#' mod <- newTerm()
+#' mod <- addTmy(mod, "ORPortland3.tm2")
+#' 
+addTmy <- function(term, tmyFiles) {
+  term$tmy <- tmyData[tmyData$tmyFile %in% tmyFiles, ]
+  term
+}
+
+
 #' Add a method to a "term" object
 #' 
 #' Adds an evaluation method to a "term" object. Current options are for a 
@@ -493,12 +513,23 @@ evalOne <- function(term, method, weather) {
     warning(paste("Unrecognized method", names(method), "skipping"))
   }
   
-  if(!is.null(attr(term, "sqft"))) {
+  if(!is.null(attr(term, "sqft")) | attr(term, "eui") == TRUE) {
     attr(mod, "sqft") <- attr(term, "sqft")
+    eui <- TRUE
+  } else {
+    eui <- FALSE
   }
   
   if(!is.null(attr(weather, "stationid"))) {
     attr(mod, "stationid") <- attr(weather, "stationid")
+  }
+  
+  if(!is.null(term$tmy)) {
+    tmyFiles <- unique(term$tmy$tmyFile)
+    mod$tmyResults <- do.call('rbind', lapply(tmyFiles, function(tmyFile) {
+      data.frame("tmyFile" = tmyFile,
+                 "TMY" = makeTmyPrediction(mod, tmyData[tmyData$tmyFile == tmyFile, ], names(term$methods)[method], eui))
+    }))
   }
   
   return(mod)

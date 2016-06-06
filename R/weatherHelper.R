@@ -429,11 +429,11 @@ stationSearch <- function(geocode = NULL, stationName = NULL, lat = NULL, lon = 
 }
 
 
-stationSearchTmy <- function(geocode = NULL, stationName = NULL, lat = NULL, lon = NULL, nClosest = 5, country = NULL, state = NULL, elevThreshold = NULL) {
+tmySearch <- function(geocode = NULL, stationName = NULL, lat = NULL, lon = NULL, nClosest = 5, country = NULL, state = NULL, elevThreshold = NULL) {
   stationSearch(geocode, stationName, lat, lon, nClosest, country, state, elevThreshold, type = "TMY")
 }
 
-stationSearchGhcn <- function(geocode = NULL, stationName = NULL, lat = NULL, lon = NULL, nClosest = 5, country = NULL, state = NULL, elevThreshold = NULL) {
+ghcnSearch <- function(geocode = NULL, stationName = NULL, lat = NULL, lon = NULL, nClosest = 5, country = NULL, state = NULL, elevThreshold = NULL) {
   stationSearch(geocode, stationName, lat, lon, nClosest, country, state, elevThreshold, type = "GHCN")
 }
 

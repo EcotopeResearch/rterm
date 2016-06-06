@@ -449,7 +449,7 @@ fitted.tlm <- function(mod, fit = NULL) {
   }
   
   coefs <- coef(mod, fit, silent = TRUE)
-  
+
   if(!is.na(coefs['baseLoad'])) {
     toReturn <- rep(coefs['baseLoad'], nrow(mod$data))
   } else {
@@ -515,7 +515,19 @@ print.term <- function(term) {
     })
     coefTable <- cbind(coefTable, "R2" = unlist(R2s))
     
+    if(!is.null(term$tmy)) {
+      coefTable$model <- row.names(coefTable)
+      tmys <- do.call('rbind', lapply(seq_along(term$models), function(i) {
+          df <- data.frame(t(term$models[[i]]$tmyResults$TMY))
+          names(df) <- term$models[[i]]$tmyResults$tmyFile
+          df$model <- names(term$models)[i]
+          df
+      }))
+      coefTable <- merge(coefTable, tmys)
+    }
+    
     print(coefTable)
+    
   }
 }
 
@@ -623,7 +635,7 @@ plot.term <- function(term, xvar = NULL) {
   if(is.null(xvar)) {
     xvar <- "temp"
   }
-  if(!is.null(attr(term, "sqft"))) {
+  if(!is.null(attr(term, "sqft")) | attr(term, "eui") == TRUE) {
     yvar <- "Annualized EUI"
   } else if(attr(term, "gas")) {
     yvar <- "Daily Therms"
@@ -730,7 +742,7 @@ plot.tlm <- function(x, fit = NULL) {
     fit <- attr(x, "fit")
   }
   
-  if(!is.null(attr(x, "sqft"))) {
+  if(!is.null(attr(x, "sqft")) | attr(x, "eui") == TRUE) {
     yvar <- "Annualized EUI"
   } else if(attr(x, "gas")) {
     yvar <- "Daily Therms"
@@ -1101,7 +1113,7 @@ plot.projection <- function(projection, movingAverage = FALSE, total = TRUE) {
     bounds <- merge(bounds, tmp[tmp$overall > 0, ])
   }
   
-  if(!is.null(attr(projection[[1]], "sqft"))) {
+  if(!is.null(attr(projection[[1]], "sqft")) | attr(projection[[1]], "eui")) {
     yvar <- "Annualized EUI"
   } else if(attr(projection[[1]], "gas")) {
     yvar <- "Daily Therms"
@@ -1230,5 +1242,62 @@ modelSelect <- function(data, weather, intercept, lambda, selection = "L1") {
   list("l1Results" = l1Results,
        "heatingDefault" = heatingDefault,
        "coolingDefault" = coolingDefault)
+  
+}
+
+
+
+makeTmyPrediction <- function(mod, tmyData, type, eui = FALSE) {
+  coefs <- coef(mod)
+  dset <- mod$data
+  tmyData$tmyFitted <- 0
+  medianDays <- median(mod$data$days)
+  nIntervals <- ceiling(365 / medianDays)
+  tmyData$interval <- rep(1:nIntervals, each = medianDays)[1:365]
+  dset <- plyr::ddply(tmyData, "interval", function(x) {
+    data.frame("doyStart" = min(x$doy),
+               "doyEnd" = max(x$doy),
+               "temp" = mean(x$temp),
+               "days" = nrow(x))
+  })
+  
+  cp <- TRUE
+  if(length(grep("dd", type))) cp <- FALSE
+  pred <- 0
+  if(!is.na(coefs['baseLoad'])) {
+    dset$tmyFitted <- coefs['baseLoad']
+  }
+  if(!is.na(coefs['heatingSlope'])) {
+    dset$xHeating <- sapply(1:nrow(dset), function(i) {
+      rowsTmp <- which(tmyData$doy >= dset$doyStart[i] & tmyData$doy <= dset$doyEnd[i])  
+      if(cp) {
+        max(c(0, coefs['heatingBase'] - mean(tmyData$temp[rowsTmp])))
+      } else {
+        mean(sapply(rowsTmp, function(r) {
+          max(c(0, coefs['heatingBase'] - tmyData$temp[r]))
+        }))  
+      }
+    })
+    dset$tmyFitted <- dset$tmyFitted + coefs['heatingSlope'] * dset$xHeating
+  }
+  if(!is.na(coefs['coolingSlope'])) {
+    dset$xCooling <- sapply(1:nrow(dset), function(i) {
+      rowsTmp <- which(tmyData$doy >= dset$doyStart[i] & tmyData$doy <= dset$doyEnd[i])
+      if(cp) {
+        max(c(0, mean(tmyData$temp[rowsTmp]) - coefs['coolingBase']))
+      } else {
+        mean(sapply(rowsTmp, function(r) {
+          max(c(0, tmyData$temp[r] - coefs['coolingBase']))
+        })) 
+      }
+    })
+    dset$tmyFitted <- dset$tmyFitted + coefs['coolingSlope'] * dset$xCooling
+  }    
+
+  if(eui) {
+    return(mean(dset$tmyFitted))
+  } else {
+    return(sum(dset$tmyFitted * dset$days))
+  }
   
 }

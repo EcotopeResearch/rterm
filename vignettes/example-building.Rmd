@@ -40,6 +40,12 @@ stationMap(comp)
 
 This particular building is a bit south of the Seattle label on the map, so we can disqualify Sand Point. Once again Boeing Field shows up as being warmer than the other weather stations, and since it's not in the SoDo/Georgetown area we can disqualify Boeing Field as well. Kent is missing some data. Either Renton or Sea-Tac are logical choices here, although since we're going to project onto archival weather data let's use Sea-Tac: those records date back to 1948.
 
+We can also search for TMY stations.
+
+```{r}
+tmySearch("Seattle, WA")
+```
+
 ## Fit the model
 
 Let's start by just straight ahead fitting to all the data. One thing to point out here is that the consumption is total kWh across the interval, rather than daily kWh. Adding the square footage into the newTerm function then triggers the code to work in EUI, which is Energy Use Intensity as kBtu/ sq ft / year. 
@@ -52,6 +58,7 @@ mod <- newTerm("Seattle Commercial Building", sqft = 36000) %>%
   addData(commercial, kWh ~ Start.Date + End.Date, daily = FALSE) %>%
   addWeather(stationid = "GHCND:USW00024233", name = "Sea-Tac") %>%
   addMethod("cp") %>% addMethod("dd") %>%
+  addTmy(c("WASeattle3.tm2", "WASeattleBoeing3.tm2")) %>%
   evaluate()
 mod
 plot(mod, "raw")
