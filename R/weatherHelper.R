@@ -799,6 +799,7 @@ geocode <- function(name, quietly = TRUE) {
   urly <- paste("https://maps.googleapis.com/maps/api/elevation/json?locations=", 
                 code['lat'], ",", code['lon'], "&key=", google_key, sep = "")
   tmp <- httr::GET(urly)
+  check_results <- jsonlite::fromJSON(httr::content(tmp, "text"))
   
   if(check_results$status == "REQUEST_DENIED"){
       stop("Google Maps API Key request denied, check your key")
