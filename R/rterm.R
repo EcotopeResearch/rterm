@@ -76,7 +76,10 @@ addData <- function(term, data, formula = NULL, interval = NULL, energyVar = NUL
   if(!is.null(term$data)) {
     warning("Data already found, will overwrite")
   }
-  
+
+  attr(term, "eui") <- FALSE  
+  attr(term, "gas") <- FALSE
+  isGas <- FALSE
   
   # First check for a formula
   if(!is.null(formula)) {
@@ -85,7 +88,6 @@ addData <- function(term, data, formula = NULL, interval = NULL, energyVar = NUL
     y <- model.response(mf)
     term$data <- data.frame(mf)
     eName <- tolower(names(term$data)[1])
-    attr(term, "eui") <- FALSE
     if(length(grep("gas", eName)) | length(grep("therm", eName)) | length(grep("thm", eName))) {
       isGas <- TRUE
       attr(term, "gas") <- TRUE
@@ -93,7 +95,6 @@ addData <- function(term, data, formula = NULL, interval = NULL, energyVar = NUL
       attr(term, "eui") <- TRUE
     } else {
       isGas <- FALSE
-      attr(term, "gas") <- FALSE
     }
     names(term$data)[1] <- "energy"
     
