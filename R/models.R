@@ -518,10 +518,12 @@ print.term <- function(term) {
     if(!is.null(term$tmy)) {
       coefTable$model <- row.names(coefTable)
       tmys <- do.call('rbind', lapply(seq_along(term$models), function(i) {
-          df <- data.frame(t(term$models[[i]]$tmyResults$TMY))
-          names(df) <- term$models[[i]]$tmyResults$tmyFile
-          df$model <- names(term$models)[i]
-          df
+        df1 <- term$models[[i]]$tmyResults
+        # print(df1)
+        df2 <- df1[, grep("tmy", names(df1))]
+        df2$tmyFile <- NULL
+        df2$model <- names(term$models)[i]
+        df2
       }))
       coefTable <- merge(coefTable, tmys)
     }
@@ -1249,7 +1251,7 @@ modelSelect <- function(data, weather, intercept, lambda, selection = "L1") {
 
 makeTmyPrediction <- function(mod, tmyData, type, eui = FALSE) {
   coefs <- coef(mod)
-  dset <- mod$data
+  # dset <- mod$data
   tmyData$tmyFitted <- 0
   medianDays <- median(mod$data$days)
   nIntervals <- ceiling(365 / medianDays)
@@ -1263,8 +1265,9 @@ makeTmyPrediction <- function(mod, tmyData, type, eui = FALSE) {
   
   cp <- TRUE
   if(length(grep("dd", type))) cp <- FALSE
-  pred <- 0
+  dset$tmyFitted <- 0
   if(!is.na(coefs['baseLoad'])) {
+    dset$tmyBaseLoad <- coefs['baseLoad']
     dset$tmyFitted <- coefs['baseLoad']
   }
   if(!is.na(coefs['heatingSlope'])) {
@@ -1278,7 +1281,8 @@ makeTmyPrediction <- function(mod, tmyData, type, eui = FALSE) {
         }))  
       }
     })
-    dset$tmyFitted <- dset$tmyFitted + coefs['heatingSlope'] * dset$xHeating
+    dset$tmyHeating <- coefs['heatingSlope'] * dset$xHeating
+    dset$tmyFitted <- dset$tmyFitted + dset$tmyHeating
   }
   if(!is.na(coefs['coolingSlope'])) {
     dset$xCooling <- sapply(1:nrow(dset), function(i) {
@@ -1291,13 +1295,21 @@ makeTmyPrediction <- function(mod, tmyData, type, eui = FALSE) {
         })) 
       }
     })
-    dset$tmyFitted <- dset$tmyFitted + coefs['coolingSlope'] * dset$xCooling
+    dset$tmyCooling <- coefs['coolingSlope'] * dset$xCooling
+    dset$tmyFitted <- dset$tmyFitted + dset$tmyCooling
   }    
-
+print(dset)
   if(eui) {
-    return(mean(dset$tmyFitted))
+    tmp <- as.data.frame(t(apply(dset[, names(dset) %in% c("tmyFitted", "tmyBaseLoad", "tmyHeating", "tmyCooling")], 2, mean)))
+    # print(tmp)
+    return(tmp)
+    # return(mean(dset$tmyFitted))
   } else {
-    return(sum(dset$tmyFitted * dset$days))
+    tmp <- as.data.frame(t(apply(dset[, names(dset) %in% c("tmyFitted", "tmyBaseLoad", "tmyHeating", "tmyCooling")], 2, function(x) {
+      sum(x * dset$days)
+    })))
+    return(tmp)
+    # return(sum(dset$tmyFitted * dset$days))
   }
   
 }
