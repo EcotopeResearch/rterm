@@ -28,7 +28,7 @@ ddlm <- function(data, weather, controls) {
   
   class(mod) <- c("ddlm", "tlm")
   
-  mod$data$fitted <- fitted(mod)
+  mod$data$fitted <- fitted(mod, controls$selection)
   mod$data$resid <- mod$data$dailyEnergy - mod$data$fitted
   
   return(mod)
@@ -62,7 +62,7 @@ cplm <- function(data, weather, controls) {
   mod$data$temp <- deriveOne(weather, coefs['coolingBase'], type = 3L, heatcool = 1L, n = nrow(data))
   
   class(mod) <- c("cplm", "tlm")
-  mod$data$fitted <- fitted(mod)
+  mod$data$fitted <- fitted(mod, controls$selection)
   mod$data$resid <- mod$data$dailyEnergy - mod$data$fitted
   
   return(mod)
@@ -1255,7 +1255,11 @@ makeTmyPrediction <- function(mod, tmyData, type, eui = FALSE) {
   tmyData$tmyFitted <- 0
   medianDays <- median(mod$data$days)
   nIntervals <- ceiling(365 / medianDays)
-  tmyData$interval <- rep(1:nIntervals, each = medianDays)[1:365]
+  iLength <- floor(365 / nIntervals)
+  iVals <- rep(1:nIntervals, each = iLength)
+  lastRepAdd <- 365 - length(iVals)
+  iVals <- c(iVals, rep(nIntervals, lastRepAdd))
+  tmyData$interval <- iVals
   dset <- plyr::ddply(tmyData, "interval", function(x) {
     data.frame("doyStart" = min(x$doy),
                "doyEnd" = max(x$doy),
@@ -1298,7 +1302,7 @@ makeTmyPrediction <- function(mod, tmyData, type, eui = FALSE) {
     dset$tmyCooling <- coefs['coolingSlope'] * dset$xCooling
     dset$tmyFitted <- dset$tmyFitted + dset$tmyCooling
   }    
-print(dset)
+
   if(eui) {
     tmp <- as.data.frame(t(apply(dset[, names(dset) %in% c("tmyFitted", "tmyBaseLoad", "tmyHeating", "tmyCooling")], 2, mean)))
     # print(tmp)

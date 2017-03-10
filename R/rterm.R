@@ -414,10 +414,10 @@ addMethod <- function(term, method, name = NULL, ...) {
   # I need default options... store them here
   if(tolower(method) %in% c("change-point", "changepoint", "cp")) {
     method <- "cp"
-    defaults <- list(heating = NULL, cooling = NULL, intercept = TRUE, se = TRUE, nreps = 200, parametric = FALSE, lambda = 12, selection = "L1")
+    defaults <- list(heating = NULL, cooling = NULL, intercept = TRUE, se = TRUE, nreps = 200, parametric = FALSE, lambda = 12, selection = "LS")
   } else if(tolower(method) %in% c("degree-day", "degreeday", "dd")) {
     method <- "dd"
-    defaults <- list(heating = NULL, cooling = NULL, intercept = TRUE, se = TRUE, nreps = 200, parametric = FALSE, lambda = 8, selection = "L1") 
+    defaults <- list(heating = NULL, cooling = NULL, intercept = TRUE, se = TRUE, nreps = 200, parametric = FALSE, lambda = 8, selection = "LS") 
   } else if(tolower(method) %in% c("web", "bayes", "bayesian")) {
     method <- "web"
     defaults <- list(heating = NULL, cooling = NULL, intercept = TRUE, selection = "L1", lambda = 10, 
