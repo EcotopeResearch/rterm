@@ -527,10 +527,17 @@ evalOne <- function(term, method, weather) {
   
   if(!is.null(term$tmy)) {
     tmyFiles <- unique(term$tmy$tmyFile)
-    mod$tmyResults <- do.call('rbind', lapply(tmyFiles, function(tmyFile) {
-      tmp <- data.frame("tmyFile" = tmyFile)
-                 # "TMY" = makeTmyPrediction(mod, tmyData[tmyData$tmyFile == tmyFile, ], names(term$methods)[method], eui))
-      tmp <- cbind(tmp, makeTmyPrediction(mod, tmyData[tmyData$tmyFile == tmyFile, ], names(term$methods)[method], eui))
+    tmyResults <- lapply(tmyFiles, function(tmyFile) {
+      makeTmyPrediction(mod, tmyData[tmyData$tmyFile == tmyFile, ], names(term$methods)[method], eui)
+    })
+    mod$tmyResults <- do.call('rbind', lapply(seq_along(tmyResults), function(i) {
+      tmp <- data.frame("tmyFile" = tmyFiles[i])
+      tmp <- cbind(tmp, tmyResults[[i]]$tmyResults)
+      tmp
+    }))
+    mod$tmyPredDsets <- do.call('rbind', lapply(seq_along(tmyResults), function(i) {
+      tmp <- tmyResults[[i]]$tmyPredDset
+      tmp$tmyFile <- tmyFiles[i]
       tmp
     }))
   }

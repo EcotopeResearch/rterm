@@ -1306,14 +1306,15 @@ makeTmyPrediction <- function(mod, tmyData, type, eui = FALSE) {
   if(eui) {
     tmp <- as.data.frame(t(apply(dset[, names(dset) %in% c("tmyFitted", "tmyBaseLoad", "tmyHeating", "tmyCooling")], 2, mean)))
     # print(tmp)
-    return(tmp)
+    
     # return(mean(dset$tmyFitted))
   } else {
     tmp <- as.data.frame(t(apply(dset[, names(dset) %in% c("tmyFitted", "tmyBaseLoad", "tmyHeating", "tmyCooling")], 2, function(x) {
       sum(x * dset$days)
     })))
-    return(tmp)
+    # return(tmp)
     # return(sum(dset$tmyFitted * dset$days))
   }
+  return(list("tmyPredDset" = dset, "tmyResults" = tmp))
   
 }
