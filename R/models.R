@@ -1064,6 +1064,7 @@ oneProjection <- function(mod, weather, nYears = 20) {
     attr(toReturn, "sqft")
   }
   attr(toReturn, "gas") <- attr(mod, "gas")
+  attr(toReturn, "eui") <- attr(mod, "eui")
   toReturn
 
 }

@@ -2,7 +2,11 @@
 title: "Assigning Weather Stations"
 author: "Mike Logsdon"
 date: "05/19/2015"
-output: pdf_document
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{An Example Building with rterm}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
 

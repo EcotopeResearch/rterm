@@ -568,6 +568,7 @@ extractModel <- function(term, name) {
   }
   toReturn <- term$models[[toSelect]]
   attr(toReturn, "gas") <- attr(term, "gas")
+  attr(toReturn, "eui") <- attr(term, "eui")
   if(!is.null(attr(term, "sqft"))) {
     attr(toReturn, "sqft") <- attr(term, "sqft")
   }
