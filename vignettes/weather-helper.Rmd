@@ -24,7 +24,6 @@ noaa_key <- "your_key_here"
 
 ```{r, echo=FALSE}
 # These keys have been registered for the sole use of building rterm vignettes
-google_key <- "AIzaSyCOavbshIM5-TY3Dm07ar_l_BwR6gvQYWk"
 noaa_key <- "fBQbabTcSnILcGQWxfXBYLMclnUKLVlH"
 ```
 
@@ -45,6 +44,12 @@ To unleash the full convenience of rterm, you can optionally register another AP
 ```{r}
 google_key <- "your_key_here"
 ```
+
+```{r, echo=FALSE}
+# These keys have been registered for the sole use of building rterm vignettes
+google_key <- "AIzaSyCOavbshIM5-TY3Dm07ar_l_BwR6gvQYWk"
+```
+
 
 In addition, it will help to activate the [Elevation API](https://console.developers.google.com/project/tensile-market-95016/apiui/apiview/elevation_backend/overview) as well. The custom geocoding function in rterm also grabs an elevation, as it is often useful to exclude stations that are say atop a mountain near your building's location.
 
