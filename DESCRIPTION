@@ -18,5 +18,7 @@ Imports:
   lubridate,
   ggmap,
   methods
-Suggests: knitr
+Suggests: 
+  knitr,
+  rstan
 VignetteBuilder: knitr
