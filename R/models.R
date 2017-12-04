@@ -53,17 +53,29 @@ cplm <- function(data, weather, controls) {
     coefs <- mod$L1
   }
   
+  mod$data$temp <- deriveOne(weather, coefs['coolingBase'], type = 3L, heatcool = 1L, n = nrow(data))
+  # For a change point model, we want a "fitted" data frame when plotted against temp to not have a confusing bonus elbow
+  dfFitted <- data.frame("temp" = seq(from = min(mod$data$temp), to = max(mod$data$temp), length.out = 100))
+  dfFitted$fitted <- 0
+  if(!is.na(coefs['baseLoad'])) {
+    dfFitted$fitted <- coefs['baseLoad']
+  }
   if(!is.na(coefs['heatingBase'])) {
     mod$data$xHeating <- deriveOne(weather, coefs['heatingBase'], type = 1L, heatcool = 1L, n = nrow(data))
+    dfFitted$xHeating <- (coefs['heatingBase'] - dfFitted$temp) * ((coefs['heatingBase'] - dfFitted$temp) > 0)
+    dfFitted$fitted <- dfFitted$fitted + dfFitted$xHeating * coefs['heatingSlope']
   }
   if(!is.na(coefs['coolingBase'])) {
     mod$data$xCooling <- deriveOne(weather, coefs['coolingBase'], type = 1L, heatcool = 2L, n = nrow(data))
+    dfFitted$xCooling <- (dfFitted$temp - coefs['coolingBase']) * ((dfFitted$temp - coefs['coolingBase']) > 0)
+    dfFitted$fitted <- dfFitted$fitted + dfFitted$xCooling * coefs['coolingSlope']
   }
-  mod$data$temp <- deriveOne(weather, coefs['coolingBase'], type = 3L, heatcool = 1L, n = nrow(data))
+
   
   class(mod) <- c("cplm", "tlm")
   mod$data$fitted <- fitted(mod, controls$selection)
   mod$data$resid <- mod$data$dailyEnergy - mod$data$fitted
+  mod$dfFitted <- dfFitted
   
   return(mod)
   
@@ -675,15 +687,36 @@ plot.term <- function(term, xvar = NULL) {
   }))
   
   if(xvar == "temp") {
+    # Look for the special dfFitted data frame on a change point model
+    fittedCp <- NULL; fittedOther <- NULL
+    for(i in seq_along(term$models)) {
+      dfFitted <- term$models[[i]]$dfFitted
+      if(!is.null(dfFitted)) {
+        dfFitted$type <- names(term$models)[i]
+        fittedCp <- rbind(fittedCp, dfFitted)
+      }  else {
+        fittedOther <- rbind(fittedOther, abc[abc$type == names(term$models[i]), ])
+      }
+    }
+
     p <- ggplot2::ggplot(abc) + ggplot2::theme_bw() + 
       ggplot2::geom_point(data = meanTemps, ggplot2::aes(x = temp, y = dailyEnergy)) + 
       ggplot2::ggtitle(paste(attr(term, "name", exact = TRUE), "Energy versus Temperature")) + 
       ggplot2::xlab("Average Temperature (F)") +
       ggplot2::ylab(yvar)
     if(nmodels > 1) {
-      p <- p + ggplot2::geom_line(ggplot2::aes(x = temp, y = fitted, col = type))
+      if(!is.null(fittedCp)) {
+        p <- p + ggplot2::geom_line(data = fittedCp, ggplot2::aes(x = temp, y = fitted, col = type))
+      } 
+      if(!is.null(fittedOther)) {
+        p <- p + ggplot2::geom_line(data = fittedOther, ggplot2::aes(x = temp, y = fitted, col = type))
+      }
     } else {
-      p <- p + ggplot2::geom_line(ggplot2::aes(x = temp, y = fitted))
+      if(!is.null(fittedCp)) {
+        p <- p + ggplot2::geom_line(data = fittedCp, ggplot2::aes(x = temp, y = fitted))  
+      } else if(!is.null(fittedOther)) {
+        p <- p + ggplot2::geom_line(fittedOther, ggplot2::aes(x = temp, y = fitted))
+      }
     }
   } else if(tolower(xvar) == "raw") {
     p <- ggplot2::ggplot(abc) + ggplot2::theme_bw() + 
