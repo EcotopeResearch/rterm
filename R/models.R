@@ -516,8 +516,8 @@ print.term <- function(term) {
     print("No Models Evaluated")
   } else {
     print("Evaluated Models:")
-    coefTable <- do.call("rbind", lapply(term$models, function(x) x$LS))
-    coefTable <- data.frame(coefTable)
+    coefTable <- do.call("rbind", lapply(term$models, function(x) as.data.frame(t(x$LS))))
+    # coefTable <- as.data.frame(coefTable)
     coefTable[] <- lapply(coefTable, function(x) if(!sum(!is.na(x))) NULL else x)
     
     R2s <- lapply(term$models, function(x) {
@@ -526,22 +526,22 @@ print.term <- function(term) {
       1 - ssErr / ssTot
     })
     coefTable <- cbind(coefTable, "R2" = unlist(R2s))
+
     
     if(!is.null(term$tmy)) {
       coefTable$model <- row.names(coefTable)
-      tmys <- do.call('rbind', lapply(seq_along(term$models), function(i) {
+      
+      tmys <- do.call(plyr::rbind.fill, lapply(seq_along(term$models), function(i) {
         df1 <- term$models[[i]]$tmyResults
         # print(df1)
         df2 <- df1[, grep("tmy", names(df1))]
         df2$tmyFile <- NULL
         df2$model <- names(term$models)[i]
-        df2
+        as.data.frame(df2)
       }))
       coefTable <- merge(coefTable, tmys)
     }
-    
     print(coefTable)
-    
   }
 }
 
@@ -938,6 +938,7 @@ projection <- function(term, nYears = 20) {
   
   maxdate <- lubridate::today()
   mindate <- lubridate::floor_date(maxdate - lubridate::years(nYears), "year")
+  maxdate <- lubridate::floor_date(maxdate, "year") - 1
   
   uniqueIds <- unique(unlist(ids))
   weather <- lapply(uniqueIds, function(x) {
